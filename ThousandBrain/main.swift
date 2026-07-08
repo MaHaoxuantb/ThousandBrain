@@ -164,9 +164,11 @@ class Core {
             }
         }
         B.TotalHeat = TotalHeat
-        print(
-            "Total AP Fired: ", TotalNumberOfAPFired, ", Total Number of unfinished groups: ",
-            TotalNumberOfUnfinishedGroups)
+        if TestConfig.DEBUG {
+            print(
+                "Total AP Fired: ", TotalNumberOfAPFired, ", Total Number of unfinished groups: ",
+                TotalNumberOfUnfinishedGroups)
+        }
         return AllGroupsFinished
     }
 }
@@ -272,7 +274,9 @@ func RunInnerIterations(B: BRAIN) {
             CurrentInnerIteration: CurrentInnerIteration,
             TotalEnergyLeft: &TotalEnergyLeft
         )
-        print("Finished Iteration: ", CurrentInnerIteration, "Brain Total Heat: ", B.TotalHeat)
+        if TestConfig.DEBUG {
+            print("Finished Iteration: ", CurrentInnerIteration, "Brain Total Heat: ", B.TotalHeat)
+        }
     }
 }
 

@@ -217,7 +217,7 @@ func Train(B: BRAIN) {
         InitializeInputs(B: B, DataPoint: DataPoint)
 
         // Inner Iteration to get the result
-        RunInnerIterations(B: B)
+        let InnerIterationsUsed = RunInnerIterations(B: B)
 
         // Punish all groups that get the thing wrong accordingly
         // Just Random the connections for all groups
@@ -240,7 +240,7 @@ func Train(B: BRAIN) {
 
         CleanTheBrain(B: B)
         CurrentOuterIteration += 1
-        print("Finished Outer Iteration: ", CurrentOuterIteration)
+        print("Finished Outer Iteration: ", CurrentOuterIteration, " ,Inner Iterations Used: ", InnerIterationsUsed)
     }
 }
 
@@ -262,7 +262,7 @@ func InitializeInputs(B: BRAIN, DataPoint: TrainData.OneDataPoint) {
     }
 }
 
-func RunInnerIterations(B: BRAIN) {
+func RunInnerIterations(B: BRAIN) -> Int64 {
     // Start Iteration
     var CurrentInnerIteration: Int64 = 0
     var AllGroupsFinished: Bool = false
@@ -278,6 +278,7 @@ func RunInnerIterations(B: BRAIN) {
             print("Finished Iteration: ", CurrentInnerIteration, "Brain Total Heat: ", B.TotalHeat)
         }
     }
+    return CurrentInnerIteration
 }
 
 func CleanTheBrain(B: BRAIN) {

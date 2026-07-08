@@ -36,7 +36,7 @@ class Neuron {
         self.APThreshold = -Float32.random(in: 0.0...10.0)
         self.NeuronState = .Normal
         self.ActiveDischargeTimePoint = 0
-        self.ActiveDischargeInputSimulateCurve = [40, 20, 5]
+        self.ActiveDischargeInputSimulateCurve = [30, 20, 5]
         self.LastAPTime = 0
     }
 

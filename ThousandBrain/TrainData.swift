@@ -20,6 +20,18 @@ class TrainData {
             OneDataPoint(I1: 0.5, I2: 1.0, O1: 1.0),
             OneDataPoint(I1: 1.0, I2: 0.5, O1: 1.0),
             OneDataPoint(I1: 1.0, I2: 1.0, O1: 0.5),
+            OneDataPoint(I1: 0.5, I2: 0.5, O1: 0.5),
+            OneDataPoint(I1: 0.5, I2: 1.0, O1: 1.0),
+            OneDataPoint(I1: 1.0, I2: 0.5, O1: 1.0),
+            OneDataPoint(I1: 1.0, I2: 1.0, O1: 0.5),
+            OneDataPoint(I1: 0.5, I2: 0.5, O1: 0.5),
+            OneDataPoint(I1: 0.5, I2: 1.0, O1: 1.0),
+            OneDataPoint(I1: 1.0, I2: 0.5, O1: 1.0),
+            OneDataPoint(I1: 1.0, I2: 1.0, O1: 0.5),
+            OneDataPoint(I1: 0.5, I2: 0.5, O1: 0.5),
+            OneDataPoint(I1: 0.5, I2: 1.0, O1: 1.0),
+            OneDataPoint(I1: 1.0, I2: 0.5, O1: 1.0),
+            OneDataPoint(I1: 1.0, I2: 1.0, O1: 0.5),
         ]
     }
 

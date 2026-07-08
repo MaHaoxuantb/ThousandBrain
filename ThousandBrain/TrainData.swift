@@ -1,6 +1,6 @@
 import Foundation
 
-//MARK: -Train Data
+//MARK: - Train Data
 class TrainData {
     var DataID: UUID
     var DataPoints: [OneDataPoint]
@@ -27,5 +27,22 @@ class TrainData {
         var I1: Float32  // Input1
         var I2: Float32
         var O1: Float32  // Output1
+    }
+}
+
+
+//MARK: - Validify data
+class ValidifyData {
+    var DataID: UUID
+    var DataPoints: [TrainData.OneDataPoint]
+
+    init() {
+        self.DataID = UUID()
+        self.DataPoints = [
+            TrainData.OneDataPoint(I1: 0.5, I2: 0.5, O1: 0.5),
+            TrainData.OneDataPoint(I1: 0.5, I2: 1.0, O1: 1.0),
+            TrainData.OneDataPoint(I1: 1.0, I2: 0.5, O1: 1.0),
+            TrainData.OneDataPoint(I1: 1.0, I2: 1.0, O1: 0.5),
+        ]
     }
 }

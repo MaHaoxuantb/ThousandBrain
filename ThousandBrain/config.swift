@@ -7,4 +7,5 @@ class Config {
     let NumberOfGroupsInABrain: Int = 20
     let NumberOfNeuronsInAGroup: Int = 20
     let StopHeatThreshold: Float32 = -60.0  // The threshold for stopping, for average neuron in a group
+    let TotalEnergy: Float32 = 10000.0 // Total mV could be used by the whole brain
 }

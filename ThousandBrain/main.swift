@@ -2,7 +2,7 @@
 //  main.swift
 //  ThousandBrain
 //
-//  Created by Thomas B on 7/8/26.
+//  Created by Thomas B on Jul 7, 26.
 //
 
 //
@@ -59,8 +59,7 @@ class Core {
                     if RandomNumber < 1.0 / Float(TestConfig.NumberOfNeuronsInAGroup) {
                         OneNeuron.NeuronType = OneNeuronType
                     }
-                    if CalculateTotalNumberOfSpecificNeuronType(
-                        Neurons: ThisGroup.Neurons, Type: OneNeuronType) > 0
+                    if CalculateTotalNumberOfSpecificNeuronType(Neurons: ThisGroup.Neurons, Type: OneNeuronType) > 0
                     {
                         break
                     }
@@ -83,7 +82,7 @@ class Core {
 
     // One Single Iteration for a group
     func OneSingleIteration(
-        Group: Group, CurrentInnerIteration: Int64, TotalNumberOfAPFired: inout Int64
+        Group: Group, CurrentInnerIteration: Int64, TotalNumberOfAPFired: inout Int64, TotalEnergyLeft: inout Float32
     ) {
         // First is process the outcomming APs: BodyPotential -> IncommingPotential
         for OneNeuron in Group.Neurons {
@@ -101,8 +100,12 @@ class Core {
                     OneNeuron.NeuronState = .Normal
                 } else {
                     // This is using extra input to simulate excitment of the neurons
-                    OneNeuron.BodyVoltage +=
-                        OneNeuron.ActiveDischargeInputSimulateCurve[Int(exactly: ActiveTime)!]
+                    // But only when there is excess energy to do so
+                    if TotalEnergyLeft > 0.0 {
+                        let VoltageIncrement: Float32 = OneNeuron.ActiveDischargeInputSimulateCurve[Int(exactly: ActiveTime)!]
+                        OneNeuron.BodyVoltage += VoltageIncrement
+                        TotalEnergyLeft -= VoltageIncrement
+                    }
                 }
             }
             // So we need to get the total leak first, for each neuron
@@ -137,7 +140,7 @@ class Core {
     }
 
     // One Inner Iteration
-    func OneInnerIteration(B: BRAIN, CurrentInnerIteration: Int64) -> Bool {
+    func OneInnerIteration(B: BRAIN, CurrentInnerIteration: Int64, TotalEnergyLeft: inout Float32) -> Bool {
         var AllGroupsFinished: Bool = true
         var TotalHeat: Float64 = 0.0
         var TotalNumberOfAPFired: Int64 = 0
@@ -148,7 +151,8 @@ class Core {
                 OneSingleIteration(
                     Group: Group,
                     CurrentInnerIteration: CurrentInnerIteration,
-                    TotalNumberOfAPFired: &TotalNumberOfAPFired
+                    TotalNumberOfAPFired: &TotalNumberOfAPFired,
+                    TotalEnergyLeft: &TotalEnergyLeft
                 )
                 for Neuron in Group.Neurons {
                     Neuron.BodyVoltage += Neuron.IncomingPotential
@@ -171,17 +175,8 @@ class CoreCalculations {
     // Core Leak function
     func LeakRateCal(N: Neuron, CurrentInnerIteration: Int64) -> Float32 {
         var leak: Float32 = 0.0
-        if N.NeuronState == .Normal {
-            leak =
-                TestConfig.LeakRateMultiplier
-                * ((N.BodyVoltage - TestConfig.RestingPotential) / N.MembraneTimeConstant)
-            return leak
-        } else {
-            // DEBUG ONLY
-            leak =
-                TestConfig.LeakRateMultiplier
-                * ((N.BodyVoltage - TestConfig.RestingPotential) / N.MembraneTimeConstant)
-        }
+        leak = TestConfig.LeakRateMultiplier * ((N.BodyVoltage - TestConfig.RestingPotential) / N.MembraneTimeConstant)
+        if leak < 0.0 { leak = 0.0 }
         return leak
     }
     // Core Heat function
@@ -216,7 +211,6 @@ func Train(B: BRAIN) {
     let TD = TrainData()
     var CurrentOuterIteration: Int64 = 0
     for DataPoint in TD.DataPoints {
-
         // Initialize the Input Neurons
         InitializeInputs(B: B, DataPoint: DataPoint)
 
@@ -246,20 +240,6 @@ func Train(B: BRAIN) {
         CurrentOuterIteration += 1
         print("Finished Outer Iteration: ", CurrentOuterIteration)
     }
-
-    func CleanTheBrain(B: BRAIN) {
-        for G in B.Groups {
-            G.Finished = false
-            G.Heat = 0.0
-            for N in G.Neurons {
-                N.BodyVoltage = 0.0
-                N.IncomingPotential = 0.0
-                N.NeuronState = .Normal
-                N.LastAPTime = 0
-            }
-        }
-        B.TotalHeat = 0.0
-    }
 }
 
 func InitializeInputs(B: BRAIN, DataPoint: TrainData.OneDataPoint) {
@@ -283,15 +263,39 @@ func InitializeInputs(B: BRAIN, DataPoint: TrainData.OneDataPoint) {
 func RunInnerIterations(B: BRAIN) {
     // Start Iteration
     var CurrentInnerIteration: Int64 = 0
-    var AllGroupsFinished = false
+    var AllGroupsFinished: Bool = false
+    var TotalEnergyLeft: Float32 = TestConfig.TotalEnergy
     while !AllGroupsFinished {
         CurrentInnerIteration += 1
         AllGroupsFinished = C.OneInnerIteration(
-            B: B, CurrentInnerIteration: CurrentInnerIteration)
+            B: B,
+            CurrentInnerIteration: CurrentInnerIteration,
+            TotalEnergyLeft: &TotalEnergyLeft
+        )
         print("Finished Iteration: ", CurrentInnerIteration, "Brain Total Heat: ", B.TotalHeat)
     }
+}
+
+func CleanTheBrain(B: BRAIN) {
+    for G in B.Groups {
+        G.Finished = false
+        G.Heat = 0.0
+        for N in G.Neurons {
+            N.BodyVoltage = 0.0
+            N.IncomingPotential = 0.0
+            N.NeuronState = .Normal
+            N.LastAPTime = 0
+        }
+    }
+    B.TotalHeat = 0.0
 }
 
 Train(B: Brain)
 
 print(Brain)
+
+
+// Validify
+func Validify(B: BRAIN) {
+    
+}

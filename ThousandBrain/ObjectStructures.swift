@@ -5,11 +5,13 @@ class Axon {
     var id: UUID
     var ConnectionStrength: Float32
     var ConnectedNeuronID: UUID
+    var TotalVoltagePassed: Float32
 
     init(ConnectedNeuronID: UUID) {
         self.id = UUID()
         self.ConnectionStrength = Float32.random(in: 0.0...1.0)
         self.ConnectedNeuronID = ConnectedNeuronID
+        self.TotalVoltagePassed = 0.0
     }
 }
 
@@ -44,13 +46,13 @@ class Neuron {
         case Normal
         case Cumulating
     }
+}
 
-    enum NeuronType: Hashable, CaseIterable {
-        case Normal
-        case Input1
-        case Input2
-        case Output1
-    }
+enum NeuronType: Hashable, CaseIterable {
+    case Normal
+    case Input1
+    case Input2
+    case Output1
 }
 
 class Group {

@@ -53,7 +53,7 @@ class Core {
             }
 
             // Randomly choose input1, input2 and output1 neuron
-            for OneNeuronType in Neuron.NeuronType.allCases {
+            for OneNeuronType in NeuronType.allCases {
                 for OneNeuron in ThisGroup.Neurons {
                     let RandomNumber: Float = Float.random(in: 0.0...1.0)
                     if RandomNumber < 1.0 / Float(TestConfig.NumberOfNeuronsInAGroup) {
@@ -67,7 +67,7 @@ class Core {
             }
         }
 
-        func CalculateTotalNumberOfSpecificNeuronType(Neurons: [Neuron], Type: Neuron.NeuronType)
+        func CalculateTotalNumberOfSpecificNeuronType(Neurons: [Neuron], Type: NeuronType)
             -> Int
         {
             var Num: Int = 0
@@ -120,6 +120,7 @@ class Core {
                 TotalLowerAxonConnectionStrength += ThisLowerConnectionStrength
                 ListOfLowerNeuronIDs.append(OneLowerAxon.ConnectedNeuronID)
                 ListOfLowerConnectionStrengths.append(ThisLowerConnectionStrength)
+                OneLowerAxon.TotalVoltagePassed += (ThisLowerConnectionStrength / TotalLowerAxonConnectionStrength) * TotalLeak     // Increment by this amount
             }
             // We need the voltage given to each fellows and give it to them
             for ThisGivenNeuron in Group.Neurons {
@@ -212,9 +213,9 @@ func Train(B: BRAIN) {
     // Outer Iterations
     let TD = TrainData()
     var CurrentOuterIteration: Int64 = 0
-    for DataPoint in TD.DataPoints {
+    for TrainDataSet in TD.TrainDataSets {
         // Initialize the Input Neurons
-        InitializeInputs(B: B, DataPoint: DataPoint)
+        InitializeInputs(B: B, TrainDataSet: TrainDataSet)
 
         // Inner Iteration to get the result
         let InnerIterationsUsed = RunInnerIterations(B: B)
@@ -224,19 +225,22 @@ func Train(B: BRAIN) {
         for G in B.Groups {
             // First check how right the group is
             var WrongIndex: Float32 = 0.0  // How wrong it is
+            let CorrectAnswer: Float32 = TrainDataSet[.Output1]!
             for N in G.Neurons {
                 if N.NeuronType == .Output1 {
-                    WrongIndex = abs(N.BodyVoltage - DataPoint.O1)  // DEBUG ONLY
+                    WrongIndex = abs(N.BodyVoltage - CorrectAnswer)  // DEBUG ONLY
                 }
             }
             // Randomnize Accordingly
             for N in G.Neurons {
                 for A in N.LowerAxons {
                     A.ConnectionStrength +=
-                        A.ConnectionStrength * (1 - WrongIndex) * Float32.random(in: -1.0...1.0)
+                        A.ConnectionStrength * WrongIndex * Float32.random(in: -1.0...1.0)
                 }
             }
         }
+        
+        // DEBUG ONLY
 
         CleanTheBrain(B: B)
         CurrentOuterIteration += 1
@@ -244,18 +248,12 @@ func Train(B: BRAIN) {
     }
 }
 
-func InitializeInputs(B: BRAIN, DataPoint: TrainData.OneDataPoint) {
+func InitializeInputs(B: BRAIN, TrainDataSet: [NeuronType: Float32]) {
     for G in B.Groups {
         for N in G.Neurons {
             var Activation: Float32 = 0.5
             if N.NeuronType != .Normal {
-                if N.NeuronType == .Input1 {
-                    Activation = 1 - DataPoint.I1
-                } else if N.NeuronType == .Input2 {
-                    Activation = 1 - DataPoint.I2
-                } else if N.NeuronType == .Output1 {
-                    Activation = 1 - DataPoint.O1
-                }
+                Activation = TrainDataSet[N.NeuronType]!
             }
             N.BodyVoltage = TestConfig.RestingPotential * Activation
         }

@@ -52,6 +52,7 @@ enum NeuronType: Hashable, CaseIterable {
     case Normal
     case Input1
     case Input2
+    case Input3
     case Output1
 }
 

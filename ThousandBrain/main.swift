@@ -50,21 +50,27 @@ class Core {
                     }
                 }
             }
-
+            
             // Randomly choose input1, input2 and output1 neuron
             for OneNeuronType in NeuronType.allCases {
-                for OneNeuron in ThisGroup.Neurons {
-                    let RandomNumber: Float = Float.random(in: 0.0...1.0)
-                    if RandomNumber < 1.0 / Float(TestConfig.NumberOfNeuronsInAGroup) {
-                        OneNeuron.NeuronType = OneNeuronType
-                        // Lower Leakage for Output Neurons
-                        if OneNeuronType == .Output1 {
-                            OneNeuron.MembraneTimeConstant = 100
+                var ThereIsOneThisNeuronType: Bool = false
+                while !ThereIsOneThisNeuronType {
+                    for OneNeuron in ThisGroup.Neurons {
+                        if OneNeuron.NeuronType == .Normal {
+                            let RandomNumber: Float = Float.random(in: 0.0...1.0)
+                            if RandomNumber < 1.0 / Float(TestConfig.NumberOfNeuronsInAGroup) {
+                                OneNeuron.NeuronType = OneNeuronType
+                                // Lower Leakage for Output Neurons
+                                if OneNeuronType == .Output1 {
+                                    OneNeuron.MembraneTimeConstant = 100
+                                }
+                            }
+                            if CalculateTotalNumberOfSpecificNeuronType(Neurons: ThisGroup.Neurons, Type: OneNeuronType) > 0
+                            {
+                                ThereIsOneThisNeuronType = true
+                                break
+                            }
                         }
-                    }
-                    if CalculateTotalNumberOfSpecificNeuronType(Neurons: ThisGroup.Neurons, Type: OneNeuronType) > 0
-                    {
-                        break
                     }
                 }
             }
@@ -105,7 +111,7 @@ class Core {
                     // This is using extra input to simulate excitment of the neurons
                     // But only when there is excess energy to do so
                     if TotalEnergyLeft > 0.0 {
-                        let VoltageIncrement: Float32 = OneNeuron.ActiveDischargeInputSimulateCurve[Int(exactly: ActiveTime)!]
+                        let VoltageIncrement: Float32 = OneNeuron.ActiveDischargeInputSimulateCurve[Int(exactly: ActiveTime)!] * (TotalEnergyLeft / TestConfig.TotalEnergyLeft)
                         OneNeuron.BodyVoltage += VoltageIncrement
                         TotalEnergyLeft -= VoltageIncrement
                     }
@@ -123,7 +129,9 @@ class Core {
                 TotalLowerAxonConnectionStrength += ThisLowerConnectionStrength
                 ListOfLowerNeuronIDs.append(OneLowerAxon.ConnectedNeuronID)
                 ListOfLowerConnectionStrengths.append(ThisLowerConnectionStrength)
-                OneLowerAxon.TotalVoltagePassed += (ThisLowerConnectionStrength / TotalLowerAxonConnectionStrength) * TotalLeak     // Increment by this amount
+            }
+            for OneLowerAxon in OneNeuron.LowerAxons {
+                OneLowerAxon.TotalVoltagePassed += (OneLowerAxon.ConnectionStrength / TotalLowerAxonConnectionStrength) * TotalLeak     // Increment by this amount
             }
             // We need the voltage given to each fellows and give it to them
             for ThisGivenNeuron in Group.Neurons {
@@ -138,9 +146,10 @@ class Core {
         }
 
         // Next, Move the incoming potential to the body potential
-        for OneNeuron in Group.Neurons {
-            OneNeuron.BodyVoltage += OneNeuron.IncomingPotential
-        }
+//        for OneNeuron in Group.Neurons {
+//            OneNeuron.BodyVoltage += OneNeuron.IncomingPotential
+//            OneNeuron.BodyVoltage = 0.0
+//        }
     }
 
     // One Inner Iteration
@@ -197,7 +206,7 @@ class CoreCalculations {
         var ReachedThreshold: Bool = false
         let Threshold: Float32 =
             TestConfig.StopHeatThreshold * Float32(TestConfig.NumberOfNeuronsInAGroup)
-        if -TotalEnergy < Threshold {
+        if TotalEnergy < Threshold {
             ReachedThreshold = true
         }
         G.Finished = ReachedThreshold
@@ -205,7 +214,7 @@ class CoreCalculations {
     }
     // Wrong Index
     func WrongIndexCal(N: Neuron, CorrectAnswer: Float32) -> Float32 {
-        let NeuronActivationIndex = 1.0 / (1.0 + exp((-0.1) * (N.BodyVoltage+(0.5*(TestConfig.RestingPotential + TestConfig.ActivatedOnPotential)))))
+        let NeuronActivationIndex = 1.0 / (1.0 + exp((-0.1) * (N.BodyVoltage - (0.5*(TestConfig.RestingPotential + TestConfig.ActivatedOnPotential)))))
         return abs(CorrectAnswer - NeuronActivationIndex)
     }
 }
@@ -243,7 +252,7 @@ func Train(B: BRAIN) {
             for N in G.Neurons {
                 for A in N.LowerAxons {
                     A.ConnectionStrength +=
-                        A.ConnectionStrength * WrongIndex * Float32.random(in: -1.0...1.0)
+                    A.ConnectionStrength * WrongIndex * Float32.random(in: -1.0...1.0) * 0.5
                 }
             }
         }
@@ -261,7 +270,7 @@ func InitializeInputs(B: BRAIN, TrainDataSet: [NeuronType: Float32]) {
         for N in G.Neurons {
             var Activation: Float32 = 0.5
             if N.NeuronType != .Normal {
-                Activation = TrainDataSet[N.NeuronType]!
+                Activation = 1 - TrainDataSet[N.NeuronType]!
             }
             N.BodyVoltage = TestConfig.RestingPotential * Activation
         }
@@ -272,7 +281,7 @@ func RunInnerIterations(B: BRAIN) -> Int64 {
     // Start Iteration
     var CurrentInnerIteration: Int64 = 0
     var AllGroupsFinished: Bool = false
-    var TotalEnergyLeft: Float32 = TestConfig.TotalEnergy
+    var TotalEnergyLeft: Float32 = TestConfig.TotalEnergyLeft
     while !AllGroupsFinished {
         CurrentInnerIteration += 1
         AllGroupsFinished = C.OneInnerIteration(
@@ -282,6 +291,10 @@ func RunInnerIterations(B: BRAIN) -> Int64 {
         )
         if TestConfig.DEBUG {
             print("Finished Iteration: ", CurrentInnerIteration, "Brain Total Heat: ", B.TotalHeat)
+        }
+        if CurrentInnerIteration >= TestConfig.MaxInnerIterations {
+            print("Break from Inner Iterations reached Maximum")
+            break
         }
     }
     return CurrentInnerIteration
@@ -319,22 +332,35 @@ func Validify(B: BRAIN) {
         let InnerIterationsUsed = RunInnerIterations(B: B)
         
         // Check If Correct
-        var TotalWrongIndex: Float32 = 0.0  // How wrong it is
-        for G in B.Groups {
-            // First check how right the group is
-            let CorrectAnswer: Float32 = TrainDataSet[.Output1]!
-            for N in G.Neurons {
-                if N.NeuronType == .Output1 {
-                    TotalWrongIndex += CoreCals.WrongIndexCal(N: N, CorrectAnswer: CorrectAnswer)  // DEBUG ONLY
+        var IndividualWrongIndexs: [Float32] = []
+        var NumOfGroupsGotThisRight: Int = 0
+        for Type in NeuronType.allCases {
+            if String(describing: Type).hasPrefix("Ou") { // Start with OU is output
+                let CorrectAnswer: Float32 = TrainDataSet[Type]!
+                for G in B.Groups {
+                    // First check how right the group is
+                    for N in G.Neurons {
+                        if N.NeuronType == .Output1 {
+                            let ThisWrongIndex = CoreCals.WrongIndexCal(N: N, CorrectAnswer: CorrectAnswer)
+                            IndividualWrongIndexs.append(ThisWrongIndex)
+                            if ThisWrongIndex < 0.25 {
+                                NumOfGroupsGotThisRight += 1
+                            }
+                        }
+                    }
                 }
             }
         }
         
-        let AverageWrongIndex: Float32 = TotalWrongIndex / Float32(TestConfig.NumberOfGroupsInABrain)
-        if AverageWrongIndex < 0.5 {
-            print("Passed Validation, with AverageWrongIndex: ", AverageWrongIndex)
+        print("Individual Group WrongIndexes: ", IndividualWrongIndexs)
+        
+        let AverageWrongIndex = IndividualWrongIndexs.reduce(0, +) / Float32(IndividualWrongIndexs.count)
+        let MaxWrongIndex = IndividualWrongIndexs.max() ?? 1.0
+
+        if Float(NumOfGroupsGotThisRight) > (0.5 * Float(IndividualWrongIndexs.count)) {
+            print("Passed Validation, AverageWrongIndex:", AverageWrongIndex, "MaxWrongIndex:", MaxWrongIndex)
         } else {
-            print("Failed Validation, with AverageWrongIndex: ", AverageWrongIndex)
+            print("Failed Validation, AverageWrongIndex:", AverageWrongIndex, "MaxWrongIndex:", MaxWrongIndex)
         }
         
         CleanTheBrain(B: B)

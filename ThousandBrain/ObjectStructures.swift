@@ -35,10 +35,10 @@ class Neuron {
         self.IncomingPotential = 0.0
         self.BodyVoltage = TestConfig.RestingPotential  // mV, starting at resting potential
         self.MembraneTimeConstant = Float32.random(in: 10.0...50.0)  // ms
-        self.APThreshold = -Float32.random(in: 0.0...10.0)
+        self.APThreshold = Float32.random(in: 10.0...20.0)
         self.NeuronState = .Normal
         self.ActiveDischargeTimePoint = 0
-        self.ActiveDischargeInputSimulateCurve = [30, 20, 5]
+        self.ActiveDischargeInputSimulateCurve = [30, 20, 5, 0, 0, 0, 0]
         self.LastAPTime = 0
     }
 

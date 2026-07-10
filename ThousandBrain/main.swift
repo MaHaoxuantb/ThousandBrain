@@ -107,6 +107,7 @@ class Core {
                 let ActiveTime = CurrentInnerIteration - OneNeuron.LastAPTime
                 if ActiveTime >= OneNeuron.ActiveDischargeInputSimulateCurve.count {
                     OneNeuron.NeuronState = .Normal
+//                    OneNeuron.BodyVoltage = TestConfig.RestingPotential  // DEBUG ONLY
                 } else {
                     // This is using extra input to simulate excitment of the neurons
                     // But only when there is excess energy to do so
@@ -130,15 +131,22 @@ class Core {
                 ListOfLowerNeuronIDs.append(OneLowerAxon.ConnectedNeuronID)
                 ListOfLowerConnectionStrengths.append(ThisLowerConnectionStrength)
             }
-            for OneLowerAxon in OneNeuron.LowerAxons {
-                OneLowerAxon.TotalVoltagePassed += (OneLowerAxon.ConnectionStrength / TotalLowerAxonConnectionStrength) * TotalLeak     // Increment by this amount
-            }
-            // We need the voltage given to each fellows and give it to them
-            for ThisGivenNeuron in Group.Neurons {
-                if let ListIndex = ListOfLowerNeuronIDs.firstIndex(of: ThisGivenNeuron.id) {
-                    ThisGivenNeuron.IncomingPotential +=
-                        (ListOfLowerConnectionStrengths[ListIndex]
-                            / TotalLowerAxonConnectionStrength) * TotalLeak
+            if TotalLowerAxonConnectionStrength >= 0 {
+                for OneLowerAxon in OneNeuron.LowerAxons {
+                    OneLowerAxon.TotalVoltagePassed += (OneLowerAxon.ConnectionStrength / TotalLowerAxonConnectionStrength) * TotalLeak     // Increment by this amount
+                }
+                
+                // We need the voltage given to each fellows and give it to them
+                for ThisGivenNeuron in Group.Neurons {
+                    if let ListIndex = ListOfLowerNeuronIDs.firstIndex(of: ThisGivenNeuron.id) {
+                        ThisGivenNeuron.IncomingPotential +=
+                            (ListOfLowerConnectionStrengths[ListIndex]
+                                / TotalLowerAxonConnectionStrength) * TotalLeak
+                    }
+                }
+            } else {
+                if TestConfig.DEBUG {
+                    print("Error Occured and I don't want to tell you what error it is.")
                 }
             }
             // And Minus for this neuron
@@ -186,6 +194,7 @@ class Core {
     }
 }
 
+//MARK: -Core Calculations
 class CoreCalculations {
     // Core Leak function
     func LeakRateCal(N: Neuron, CurrentInnerIteration: Int64) -> Float32 {
@@ -214,13 +223,89 @@ class CoreCalculations {
     }
     // Wrong Index
     func WrongIndexCal(N: Neuron, CorrectAnswer: Float32) -> Float32 {
-        let NeuronActivationIndex = 1.0 / (1.0 + exp((-0.1) * (N.BodyVoltage - (0.5*(TestConfig.RestingPotential + TestConfig.ActivatedOnPotential)))))
+        var NeuronActivationIndex = 1.0 / (1.0 + exp((-0.1) * (N.BodyVoltage - (0.5*(TestConfig.RestingPotential + TestConfig.ActivatedOnPotential)))))
+        NeuronActivationIndex = 0.5 + 0.5 * NeuronActivationIndex        // maps activation to 0.5...1.0
         return abs(CorrectAnswer - NeuronActivationIndex)
+    }
+}
+
+//MARK: -Core Learning
+
+class CoreLearning {
+    // Total Random
+    func LearnWithRandomnesss(G: Group, WrongIndex: Float32) {
+        for N in G.Neurons {
+            for A in N.LowerAxons {
+                A.ConnectionStrength +=
+                A.ConnectionStrength * WrongIndex * Float32.random(in: -1.0...1.0) * 0.5
+            }
+        }
+    }
+    
+    // Inhibition for wrong groups' current connections, Prohibition for correct ones.
+    func InhibitionLearning(G: Group, WrongIndex: Float32) {
+        
+    }
+}
+
+//MARK: -Core Run
+
+class CoreRun {
+    func InitializeInputs(B: BRAIN, TrainDataSet: [NeuronType: Float32]) {
+        for G in B.Groups {
+            for N in G.Neurons {
+                var Activation: Float32 = 0.5
+                if (N.NeuronType != .Normal) && (N.NeuronType != .Output1) {
+                    Activation = 1 - TrainDataSet[N.NeuronType]!
+                }
+                N.BodyVoltage = TestConfig.RestingPotential * Activation
+            }
+        }
+    }
+    
+    func RunInnerIterations(B: BRAIN) -> Int64 {
+        // Start Iteration
+        var CurrentInnerIteration: Int64 = 0
+        var AllGroupsFinished: Bool = false
+        var TotalEnergyLeft: Float32 = TestConfig.TotalEnergyLeft
+        while !AllGroupsFinished {
+            CurrentInnerIteration += 1
+            AllGroupsFinished = C.OneInnerIteration(
+                B: B,
+                CurrentInnerIteration: CurrentInnerIteration,
+                TotalEnergyLeft: &TotalEnergyLeft
+            )
+            if TestConfig.DEBUG {
+                print("Finished Iteration: ", CurrentInnerIteration, "Brain Total Heat: ", B.TotalHeat)
+            }
+            if CurrentInnerIteration >= TestConfig.MaxInnerIterations {
+                print("Break from Inner Iterations reached Maximum")
+                break
+            }
+        }
+        return CurrentInnerIteration
+    }
+    
+    func CleanTheBrain(B: BRAIN) {
+        for G in B.Groups {
+            G.Finished = false
+            G.Heat = 0.0
+            for N in G.Neurons {
+                N.BodyVoltage = 0.0
+                N.IncomingPotential = 0.0
+                N.NeuronState = .Normal
+                N.LastAPTime = 0
+            }
+        }
+        B.TotalHeat = 0.0
     }
 }
 
 //MARK: -Exec
 let C = Core()
+let CL = CoreLearning()
+let CR = CoreRun()
+
 var Brain = BRAIN()
 
 C.InitializeBrain(Brain: Brain)
@@ -232,10 +317,10 @@ func Train(B: BRAIN) {
     var CurrentOuterIteration: Int64 = 0
     for TrainDataSet in TD.TrainDataSets {
         // Initialize the Input Neurons
-        InitializeInputs(B: B, TrainDataSet: TrainDataSet)
+        CR.InitializeInputs(B: B, TrainDataSet: TrainDataSet)
 
         // Inner Iteration to get the result
-        let InnerIterationsUsed = RunInnerIterations(B: B)
+        let InnerIterationsUsed = CR.RunInnerIterations(B: B)
 
         // Punish all groups that get the thing wrong accordingly
         // Just Random the connections for all groups
@@ -252,66 +337,17 @@ func Train(B: BRAIN) {
             for N in G.Neurons {
                 for A in N.LowerAxons {
                     A.ConnectionStrength +=
-                    A.ConnectionStrength * WrongIndex * Float32.random(in: -1.0...1.0) * 0.5
+                        A.ConnectionStrength * WrongIndex * Float32.random(in: -1.0...1.0) * 0.5
                 }
             }
         }
         
         // DEBUG ONLY
 
-        CleanTheBrain(B: B)
+        CR.CleanTheBrain(B: B)
         CurrentOuterIteration += 1
         print("Finished Outer Iteration: ", CurrentOuterIteration, " ,Inner Iterations Used: ", InnerIterationsUsed)
     }
-}
-
-func InitializeInputs(B: BRAIN, TrainDataSet: [NeuronType: Float32]) {
-    for G in B.Groups {
-        for N in G.Neurons {
-            var Activation: Float32 = 0.5
-            if N.NeuronType != .Normal {
-                Activation = 1 - TrainDataSet[N.NeuronType]!
-            }
-            N.BodyVoltage = TestConfig.RestingPotential * Activation
-        }
-    }
-}
-
-func RunInnerIterations(B: BRAIN) -> Int64 {
-    // Start Iteration
-    var CurrentInnerIteration: Int64 = 0
-    var AllGroupsFinished: Bool = false
-    var TotalEnergyLeft: Float32 = TestConfig.TotalEnergyLeft
-    while !AllGroupsFinished {
-        CurrentInnerIteration += 1
-        AllGroupsFinished = C.OneInnerIteration(
-            B: B,
-            CurrentInnerIteration: CurrentInnerIteration,
-            TotalEnergyLeft: &TotalEnergyLeft
-        )
-        if TestConfig.DEBUG {
-            print("Finished Iteration: ", CurrentInnerIteration, "Brain Total Heat: ", B.TotalHeat)
-        }
-        if CurrentInnerIteration >= TestConfig.MaxInnerIterations {
-            print("Break from Inner Iterations reached Maximum")
-            break
-        }
-    }
-    return CurrentInnerIteration
-}
-
-func CleanTheBrain(B: BRAIN) {
-    for G in B.Groups {
-        G.Finished = false
-        G.Heat = 0.0
-        for N in G.Neurons {
-            N.BodyVoltage = 0.0
-            N.IncomingPotential = 0.0
-            N.NeuronState = .Normal
-            N.LastAPTime = 0
-        }
-    }
-    B.TotalHeat = 0.0
 }
 
 Train(B: Brain)
@@ -326,10 +362,10 @@ func Validify(B: BRAIN) {
     var CurrentOuterIteration: Int64 = 0
     for TrainDataSet in VD.TrainDataSets {
         // Initialize the Input Neurons
-        InitializeInputs(B: B, TrainDataSet: TrainDataSet)
+        CR.InitializeInputs(B: B, TrainDataSet: TrainDataSet)
 
         // Inner Iteration to get the result
-        let InnerIterationsUsed = RunInnerIterations(B: B)
+        let InnerIterationsUsed = CR.RunInnerIterations(B: B)
         
         // Check If Correct
         var IndividualWrongIndexs: [Float32] = []
@@ -363,7 +399,7 @@ func Validify(B: BRAIN) {
             print("Failed Validation, AverageWrongIndex:", AverageWrongIndex, "MaxWrongIndex:", MaxWrongIndex)
         }
         
-        CleanTheBrain(B: B)
+        CR.CleanTheBrain(B: B)
         CurrentOuterIteration += 1
         print("Finished Validate Outer Iteration: ", CurrentOuterIteration, " ,Inner Iterations Used: ", InnerIterationsUsed)
     }

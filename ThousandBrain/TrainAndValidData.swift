@@ -17,22 +17,6 @@ class TrainData {
             [.Input1: 1.0, .Input2: 0.5, .Input3: 1.0, .Output1: 0.5],
             [.Input1: 0.5, .Input2: 1.0, .Input3: 1.0, .Output1: 0.5],
             [.Input1: 1.0, .Input2: 1.0, .Input3: 1.0, .Output1: 1.0],
-            [.Input1: 0.5, .Input2: 0.5, .Input3: 0.5, .Output1: 0.5],
-            [.Input1: 1.0, .Input2: 0.5, .Input3: 0.5, .Output1: 1.0],
-            [.Input1: 0.5, .Input2: 1.0, .Input3: 0.5, .Output1: 1.0],
-            [.Input1: 0.5, .Input2: 0.5, .Input3: 1.0, .Output1: 1.0],
-            [.Input1: 1.0, .Input2: 1.0, .Input3: 0.5, .Output1: 0.5],
-            [.Input1: 1.0, .Input2: 0.5, .Input3: 1.0, .Output1: 0.5],
-            [.Input1: 0.5, .Input2: 1.0, .Input3: 1.0, .Output1: 0.5],
-            [.Input1: 1.0, .Input2: 1.0, .Input3: 1.0, .Output1: 1.0],
-            [.Input1: 0.5, .Input2: 0.5, .Input3: 0.5, .Output1: 0.5],
-            [.Input1: 1.0, .Input2: 0.5, .Input3: 0.5, .Output1: 1.0],
-            [.Input1: 0.5, .Input2: 1.0, .Input3: 0.5, .Output1: 1.0],
-            [.Input1: 0.5, .Input2: 0.5, .Input3: 1.0, .Output1: 1.0],
-            [.Input1: 1.0, .Input2: 1.0, .Input3: 0.5, .Output1: 0.5],
-            [.Input1: 1.0, .Input2: 0.5, .Input3: 1.0, .Output1: 0.5],
-            [.Input1: 0.5, .Input2: 1.0, .Input3: 1.0, .Output1: 0.5],
-            [.Input1: 1.0, .Input2: 1.0, .Input3: 1.0, .Output1: 1.0],
         ]
     }
 }

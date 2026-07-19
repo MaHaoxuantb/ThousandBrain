@@ -16,10 +16,12 @@ class SafeGuard {
                     if A.ConnectionStrength <= 0 {
                         TotallyValid = false
                         print("SafeGuard: Invalid Connection Strength, lower than 0")
-                        exit(0)
+                        A.ConnectionStrength = 0.0001
+//                        exit(0)
                     } else if A.ConnectionStrength > 1 {
                         TotallyValid = false
                         print("SafeGuard: Invalid Connection Strength, over 1")
+                        A.ConnectionStrength = 0.9999
                     }
                 }
             }

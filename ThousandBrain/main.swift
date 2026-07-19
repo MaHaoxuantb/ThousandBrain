@@ -18,6 +18,7 @@
 //
 
 import Foundation
+import Dispatch
 
 let TestConfig = Config()
 
@@ -94,8 +95,11 @@ class Core {
 
     // One Single Iteration for a group
     func OneSingleIteration(
-        Group: Group, CurrentInnerIteration: Int64, TotalNumberOfAPFired: inout Int64, TotalEnergyLeft: inout Float32
-    ) {
+        Group: Group, CurrentInnerIteration: Int64, TotalNumberOfAPFired: Int64, TotalEnergyLeft: Float32
+    ) -> (Int64, Float32) {
+        var NewTotalNumberOfAPFired: Int64 = TotalNumberOfAPFired
+        var NewTotalEnergyLeft: Float32 = TotalEnergyLeft
+        
         // First is process the outcomming APs: BodyPotential -> IncommingPotential
         for OneNeuron in Group.Neurons {
             // Handle graded potential changes into active potential
@@ -104,7 +108,7 @@ class Core {
             {
                 OneNeuron.NeuronState = .Cumulating
                 OneNeuron.LastAPTime = CurrentInnerIteration
-                TotalNumberOfAPFired += 1
+                NewTotalNumberOfAPFired += 1
             }
             if OneNeuron.NeuronState == .Cumulating {
                 let ActiveTime = CurrentInnerIteration - OneNeuron.LastAPTime
@@ -117,7 +121,7 @@ class Core {
                     if TotalEnergyLeft > 0.001 { // To avoid extremely small TotalEnergyLeft numbers that could cause problems
                         let VoltageIncrement: Float32 = OneNeuron.ActiveDischargeInputSimulateCurve[Int(exactly: ActiveTime)!] * (TotalEnergyLeft / TestConfig.TotalEnergyLeft)
                         OneNeuron.BodyVoltage += VoltageIncrement
-                        TotalEnergyLeft -= VoltageIncrement
+                        NewTotalEnergyLeft -= VoltageIncrement
                     }
                 }
             }
@@ -161,29 +165,51 @@ class Core {
 //            OneNeuron.BodyVoltage += OneNeuron.IncomingPotential
 //            OneNeuron.BodyVoltage = 0.0
 //        }
+        
+        return (NewTotalNumberOfAPFired, NewTotalEnergyLeft)
     }
 
     // One Inner Iteration
-    func OneInnerIteration(B: BRAIN, CurrentInnerIteration: Int64, TotalEnergyLeft: inout Float32) -> Bool {
+    func OneInnerIteration(B: BRAIN, CurrentInnerIteration: Int64, TotalEnergyLeft: Float32) -> (Bool, Float32) {
         var AllGroupsFinished: Bool = true
         var TotalHeat: Float64 = 0.0
         var TotalNumberOfAPFired: Int64 = 0
         var TotalNumberOfUnfinishedGroups: Int = 0
-        for Group in B.Groups {
+        var NewTotalEnergyLeft: Float32 = TotalEnergyLeft
+//        for Group in B.Groups {
+//            if !Group.Finished {
+//                AllGroupsFinished = false
+//                TotalEnergyLeft = OneSingleIteration(
+//                    Group: Group,
+//                    CurrentInnerIteration: CurrentInnerIteration,
+//                    TotalNumberOfAPFired: &TotalNumberOfAPFired,
+//                    TotalEnergyLeft: TotalEnergyLeft
+//                )
+//                // Move incoming potential to body potential
+//                for Neuron in Group.Neurons {
+//                    Neuron.BodyVoltage += Neuron.IncomingPotential
+//                    Neuron.IncomingPotential = 0.0
+//                }
+//                CoreCals.HeatCal(G: Group)
+//                TotalHeat += Float64(Group.Heat)
+//                TotalNumberOfUnfinishedGroups += 1
+//            }
+//        }
+        parallelForEach(B.Groups, workerCount: 4) { Group in
             if !Group.Finished {
                 AllGroupsFinished = false
-                OneSingleIteration(
+                (TotalNumberOfAPFired, NewTotalEnergyLeft) = self.OneSingleIteration(
                     Group: Group,
                     CurrentInnerIteration: CurrentInnerIteration,
-                    TotalNumberOfAPFired: &TotalNumberOfAPFired,
-                    TotalEnergyLeft: &TotalEnergyLeft
+                    TotalNumberOfAPFired: TotalNumberOfAPFired,
+                    TotalEnergyLeft: TotalEnergyLeft
                 )
                 // Move incoming potential to body potential
                 for Neuron in Group.Neurons {
                     Neuron.BodyVoltage += Neuron.IncomingPotential
                     Neuron.IncomingPotential = 0.0
                 }
-                CoreCals.HeatCal(G: Group)
+                self.CoreCals.HeatCal(G: Group)
                 TotalHeat += Float64(Group.Heat)
                 TotalNumberOfUnfinishedGroups += 1
             }
@@ -194,7 +220,51 @@ class Core {
                 "Total AP Fired: ", TotalNumberOfAPFired, ", Total Number of unfinished groups: ",
                 TotalNumberOfUnfinishedGroups)
         }
-        return AllGroupsFinished
+        return (AllGroupsFinished, NewTotalEnergyLeft)
+    }
+    
+    func parallelForEach<Element>(
+        _ elements: [Element],
+        workerCount: Int,
+        operation: @escaping (Element) -> Void
+    ) {
+        precondition(workerCount > 0)
+
+        guard !elements.isEmpty else {
+            return
+        }
+
+        let count = min(workerCount, elements.count)
+        let queue = DispatchQueue.global(qos: .userInitiated)
+        let group = DispatchGroup()
+        let indexLock = NSLock()
+
+        var nextIndex = 0
+
+        for _ in 0..<count {
+            group.enter()
+            queue.async {
+                defer {
+                    group.leave()
+                }
+                while true {
+                    let object: Element?
+                    indexLock.lock()
+                    if nextIndex < elements.count {
+                        object = elements[nextIndex]
+                        nextIndex += 1
+                    } else {
+                        object = nil
+                    }
+                    indexLock.unlock()
+                    guard let object else {
+                        return
+                    }
+                    operation(object)
+                }
+            }
+        }
+        group.wait()
     }
 }
 
@@ -322,10 +392,10 @@ class CoreRun {
         var TotalEnergyLeft: Float32 = TestConfig.TotalEnergyLeft
         while !AllGroupsFinished {
             CurrentInnerIteration += 1
-            AllGroupsFinished = C.OneInnerIteration(
+            (AllGroupsFinished, TotalEnergyLeft) = C.OneInnerIteration(
                 B: B,
                 CurrentInnerIteration: CurrentInnerIteration,
-                TotalEnergyLeft: &TotalEnergyLeft
+                TotalEnergyLeft: TotalEnergyLeft
             )
             if TestConfig.DEBUG {
                 print("Finished Iteration: ", CurrentInnerIteration, "Brain Total Heat: ", B.TotalHeat)

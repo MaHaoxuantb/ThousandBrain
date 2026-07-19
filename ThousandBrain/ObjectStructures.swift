@@ -9,7 +9,7 @@ class Axon {
 
     init(ConnectedNeuronID: UUID) {
         self.id = UUID()
-        self.ConnectionStrength = Float32.random(in: 0.0...1.0)
+        self.ConnectionStrength = Float32.random(in: 0.000001...0.999999) // Avoid boundaries
         self.ConnectedNeuronID = ConnectedNeuronID
         self.TotalVoltagePassed = 0.0
     }
@@ -35,7 +35,7 @@ class Neuron {
         self.IncomingPotential = 0.0
         self.BodyVoltage = TestConfig.RestingPotential  // mV, starting at resting potential
         self.MembraneTimeConstant = Float32.random(in: 10.0...50.0)  // ms
-        self.APThreshold = Float32.random(in: 10.0...20.0)
+        self.APThreshold = -Float32.random(in: 10.0...20.0)
         self.NeuronState = .Normal
         self.ActiveDischargeTimePoint = 0
         self.ActiveDischargeInputSimulateCurve = [30, 20, 5, 0, 0, 0, 0]

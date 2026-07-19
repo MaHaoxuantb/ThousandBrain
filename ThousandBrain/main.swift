@@ -21,9 +21,12 @@ import Foundation
 
 let TestConfig = Config()
 
-let CoreCals = CoreCalculations()
+//MARK: -Core
 
 class Core {
+    let CoreCals = CoreCalculations()
+    
+    
     // Init function
     func InitializeBrain(Brain: BRAIN) {
         Brain.Groups = (1...TestConfig.NumberOfGroupsInABrain).map { _ in
@@ -111,7 +114,7 @@ class Core {
                 } else {
                     // This is using extra input to simulate excitment of the neurons
                     // But only when there is excess energy to do so
-                    if TotalEnergyLeft > 0.0 {
+                    if TotalEnergyLeft > 0.001 { // To avoid extremely small TotalEnergyLeft numbers that could cause problems
                         let VoltageIncrement: Float32 = OneNeuron.ActiveDischargeInputSimulateCurve[Int(exactly: ActiveTime)!] * (TotalEnergyLeft / TestConfig.TotalEnergyLeft)
                         OneNeuron.BodyVoltage += VoltageIncrement
                         TotalEnergyLeft -= VoltageIncrement
@@ -122,7 +125,7 @@ class Core {
             let TotalLeak = CoreCals.LeakRateCal(
                 N: OneNeuron, CurrentInnerIteration: CurrentInnerIteration)
             // Then we need to get the total connection strength
-            var TotalLowerAxonConnectionStrength: Float32 = 0.0
+            var TotalLowerAxonConnectionStrength: Float32 = 0.0001
             var ListOfLowerNeuronIDs: [UUID] = []
             var ListOfLowerConnectionStrengths: [Float32] = []
             for OneLowerAxon in OneNeuron.LowerAxons {
@@ -131,7 +134,7 @@ class Core {
                 ListOfLowerNeuronIDs.append(OneLowerAxon.ConnectedNeuronID)
                 ListOfLowerConnectionStrengths.append(ThisLowerConnectionStrength)
             }
-            if TotalLowerAxonConnectionStrength >= 0 {
+            if TotalLowerAxonConnectionStrength > 0 {
                 for OneLowerAxon in OneNeuron.LowerAxons {
                     OneLowerAxon.TotalVoltagePassed += (OneLowerAxon.ConnectionStrength / TotalLowerAxonConnectionStrength) * TotalLeak     // Increment by this amount
                 }
@@ -175,6 +178,7 @@ class Core {
                     TotalNumberOfAPFired: &TotalNumberOfAPFired,
                     TotalEnergyLeft: &TotalEnergyLeft
                 )
+                // Move incoming potential to body potential
                 for Neuron in Group.Neurons {
                     Neuron.BodyVoltage += Neuron.IncomingPotential
                     Neuron.IncomingPotential = 0.0
@@ -209,7 +213,9 @@ class CoreCalculations {
         // TotalEnergy
         var TotalEnergy: Float32 = 0.0
         for Neuron in G.Neurons {
-            TotalEnergy += Neuron.BodyVoltage
+            if Neuron.NeuronType != .Output1 {  // Output is used for incrementing, not doing this
+                TotalEnergy += Neuron.BodyVoltage
+            }
         }
         // Threshold
         var ReachedThreshold: Bool = false
@@ -220,12 +226,28 @@ class CoreCalculations {
         }
         G.Finished = ReachedThreshold
         G.Heat = TotalEnergy
+        
+        
+        // DEBUG ONLY
+        for N in G.Neurons {
+            if N.NeuronType == .Output1 {
+                if N.BodyVoltage > -70.0 {
+                    G.Finished = true
+                }
+            }
+        }
     }
     // Wrong Index
     func WrongIndexCal(N: Neuron, CorrectAnswer: Float32) -> Float32 {
-        var NeuronActivationIndex = 1.0 / (1.0 + exp((-0.1) * (N.BodyVoltage - (0.5*(TestConfig.RestingPotential + TestConfig.ActivatedOnPotential)))))
-        NeuronActivationIndex = 0.5 + 0.5 * NeuronActivationIndex        // maps activation to 0.5...1.0
-        return abs(CorrectAnswer - NeuronActivationIndex)
+        let NeuronActivationIndex = 1.0 / (1.0 + exp((-0.1) * (N.BodyVoltage - (0.5*(TestConfig.RestingPotential + TestConfig.ActivatedOnPotential)))))
+        let NeuronActivationIndexNew = 0.5 + 0.5 * NeuronActivationIndex        // maps activation to 0.5...1.0
+        
+        // DEBUG ONLY
+        if abs(CorrectAnswer - NeuronActivationIndexNew)*2 <= 0 || abs(CorrectAnswer - NeuronActivationIndexNew)*2 >= 1 {
+            print("WrongIndexCal out of range.")
+        }
+        
+        return abs(CorrectAnswer - NeuronActivationIndexNew)*2
     }
 }
 
@@ -236,21 +258,51 @@ class CoreLearning {
     func LearnWithRandomnesss(G: Group, WrongIndex: Float32) {
         for N in G.Neurons {
             for A in N.LowerAxons {
-                A.ConnectionStrength +=
-                A.ConnectionStrength * WrongIndex * Float32.random(in: -1.0...1.0) * 0.5
+                let OrginalConnectionStrength: Float32 = A.ConnectionStrength
+                while true {
+                    A.ConnectionStrength = Float32.random(in: 0.000001...0.999999) // Avoid boundaries
+                    if (A.ConnectionStrength > OrginalConnectionStrength*WrongIndex * Float((1+TestConfig.RandomLearningValidRange)))
+                        && (A.ConnectionStrength > OrginalConnectionStrength*WrongIndex * Float((1-TestConfig.RandomLearningValidRange)))
+                        && (0.0 < A.ConnectionStrength)
+                        && (A.ConnectionStrength < 1.0){
+                        break
+                    }
+                }
             }
         }
     }
     
     // Inhibition for wrong groups' current connections, Prohibition for correct ones.
     func InhibitionLearning(G: Group, WrongIndex: Float32) {
-        
+        // for Higher WrongIndex
+        if WrongIndex > 0.25 {
+            for N in G.Neurons {
+                for A in N.LowerAxons {
+                    A.ConnectionStrength -= A.ConnectionStrength * WrongIndex
+                    if A.ConnectionStrength <= 0 {
+                        print("This strength went less than zero, with WrongIndex of: ", WrongIndex, "and the connection strength of (now):", A.ConnectionStrength)
+                    }
+                }
+            }
+        } else {    // for Lower WrongIndex
+            for N in G.Neurons {
+                for A in N.LowerAxons {
+                    while true {
+                        A.ConnectionStrength += A.ConnectionStrength * (1 - WrongIndex)
+                        if (A.ConnectionStrength < 1) { break }
+                    }
+                }
+            }
+        }
     }
 }
 
 //MARK: -Core Run
 
 class CoreRun {
+    let C = Core()
+    let SG = SafeGuard()
+    
     func InitializeInputs(B: BRAIN, TrainDataSet: [NeuronType: Float32]) {
         for G in B.Groups {
             for N in G.Neurons {
@@ -282,6 +334,9 @@ class CoreRun {
                 print("Break from Inner Iterations reached Maximum")
                 break
             }
+            if SG.ConnectionStrength(B: B) {
+                print("SafeGuard Error. At inner iteration: ", CurrentInnerIteration)
+            }
         }
         return CurrentInnerIteration
     }
@@ -302,109 +357,124 @@ class CoreRun {
 }
 
 //MARK: -Exec
-let C = Core()
-let CL = CoreLearning()
-let CR = CoreRun()
 
-var Brain = BRAIN()
-
-C.InitializeBrain(Brain: Brain)
-print("Brain initialize completed.")
-
-func Train(B: BRAIN) {
-    // Outer Iterations
-    let TD = TrainData()
-    var CurrentOuterIteration: Int64 = 0
-    for TrainDataSet in TD.TrainDataSets {
-        // Initialize the Input Neurons
-        CR.InitializeInputs(B: B, TrainDataSet: TrainDataSet)
-
-        // Inner Iteration to get the result
-        let InnerIterationsUsed = CR.RunInnerIterations(B: B)
-
-        // Punish all groups that get the thing wrong accordingly
-        // Just Random the connections for all groups
-        for G in B.Groups {
-            // First check how right the group is
-            var WrongIndex: Float32 = 0.0
-            let CorrectAnswer: Float32 = TrainDataSet[.Output1]!
-            for N in G.Neurons {
-                if N.NeuronType == .Output1 {
-                    WrongIndex = CoreCals.WrongIndexCal(N: N, CorrectAnswer: CorrectAnswer)
+class TrainAndValidate {
+    
+    let CR = CoreRun()
+    let CL = CoreLearning()
+    let CoreCals = CoreCalculations()
+    
+    func Train(B: BRAIN) {
+        // Outer Iterations
+        let TD = TrainData()
+        var CurrentOuterIteration: Int64 = 0
+        for TrainDataSet in TD.TrainDataSets {
+            // Initialize the Input Neurons
+            CR.InitializeInputs(B: B, TrainDataSet: TrainDataSet)
+            
+            // Inner Iteration to get the result
+            let InnerIterationsUsed = CR.RunInnerIterations(B: B)
+            
+            // Punish all groups that get the thing wrong accordingly
+            // Just Random the connections for all groups
+            for G in B.Groups {
+                // First check how right the group is
+                var WrongIndex: Float32 = 0.0
+                let CorrectAnswer: Float32 = TrainDataSet[.Output1]!
+                for N in G.Neurons {
+                    if N.NeuronType == .Output1 {
+                        WrongIndex = CoreCals.WrongIndexCal(N: N, CorrectAnswer: CorrectAnswer)
+                    }
                 }
+                // Randomnize Accordingly
+                CL.InhibitionLearning(G: G, WrongIndex: WrongIndex)
             }
-            // Randomnize Accordingly
-            for N in G.Neurons {
-                for A in N.LowerAxons {
-                    A.ConnectionStrength +=
-                        A.ConnectionStrength * WrongIndex * Float32.random(in: -1.0...1.0) * 0.5
-                }
-            }
+            
+            CR.CleanTheBrain(B: B)
+            CurrentOuterIteration += 1
+            print("Finished Outer Iteration: ", CurrentOuterIteration, " ,Inner Iterations Used: ", InnerIterationsUsed)
+            
+            // Testing for the neuron connection strength problem
+            //        for G in B.Groups {
+            //            for N in G.Neurons {
+            //                for A in N.LowerAxons {
+            //                    if A.ConnectionStrength <= 0.0 {
+            //                        print("Something Went wrong")
+            //                    }
+            //                }
+            //            }
+            //        }
         }
-        
-        // DEBUG ONLY
-
-        CR.CleanTheBrain(B: B)
-        CurrentOuterIteration += 1
-        print("Finished Outer Iteration: ", CurrentOuterIteration, " ,Inner Iterations Used: ", InnerIterationsUsed)
     }
-}
-
-Train(B: Brain)
-
-print(Brain)
-
-
-//MARK: - Validify
-func Validify(B: BRAIN) {
-    // Outer Iterations
-    let VD = ValidationData()
-    var CurrentOuterIteration: Int64 = 0
-    for TrainDataSet in VD.TrainDataSets {
-        // Initialize the Input Neurons
-        CR.InitializeInputs(B: B, TrainDataSet: TrainDataSet)
-
-        // Inner Iteration to get the result
-        let InnerIterationsUsed = CR.RunInnerIterations(B: B)
-        
-        // Check If Correct
-        var IndividualWrongIndexs: [Float32] = []
-        var NumOfGroupsGotThisRight: Int = 0
-        for Type in NeuronType.allCases {
-            if String(describing: Type).hasPrefix("Ou") { // Start with OU is output
-                let CorrectAnswer: Float32 = TrainDataSet[Type]!
-                for G in B.Groups {
-                    // First check how right the group is
-                    for N in G.Neurons {
-                        if N.NeuronType == .Output1 {
-                            let ThisWrongIndex = CoreCals.WrongIndexCal(N: N, CorrectAnswer: CorrectAnswer)
-                            IndividualWrongIndexs.append(ThisWrongIndex)
-                            if ThisWrongIndex < 0.25 {
-                                NumOfGroupsGotThisRight += 1
+    
+    
+    //MARK: - Validify
+    func Validify(B: BRAIN) {
+        // Outer Iterations
+        let VD = ValidationData()
+        var CurrentOuterIteration: Int64 = 0
+        for TrainDataSet in VD.TrainDataSets {
+            // Initialize the Input Neurons
+            CR.InitializeInputs(B: B, TrainDataSet: TrainDataSet)
+            
+            // Inner Iteration to get the result
+            let InnerIterationsUsed = CR.RunInnerIterations(B: B)
+            
+            // Check If Correct
+            var IndividualWrongIndexs: [Float32] = []
+            var NumOfGroupsGotThisRight: Int = 0
+            for Type in NeuronType.allCases {
+                if String(describing: Type).hasPrefix("Ou") { // Start with OU is output
+                    let CorrectAnswer: Float32 = TrainDataSet[Type]!
+                    for G in B.Groups {
+                        // First check how right the group is
+                        for N in G.Neurons {
+                            if N.NeuronType == .Output1 {
+                                let ThisWrongIndex = CoreCals.WrongIndexCal(N: N, CorrectAnswer: CorrectAnswer)
+                                IndividualWrongIndexs.append(ThisWrongIndex)
+                                if ThisWrongIndex < 0.25 {
+                                    NumOfGroupsGotThisRight += 1
+                                }
                             }
                         }
                     }
                 }
             }
+            
+            print("Individual Group WrongIndexes: ", IndividualWrongIndexs)
+            
+            let AverageWrongIndex = IndividualWrongIndexs.reduce(0, +) / Float32(IndividualWrongIndexs.count)
+            let MaxWrongIndex = IndividualWrongIndexs.max() ?? 1.0
+            
+            if Float(NumOfGroupsGotThisRight) > (0.5 * Float(IndividualWrongIndexs.count)) {
+                print("Passed Validation, AverageWrongIndex:", AverageWrongIndex, "MaxWrongIndex:", MaxWrongIndex)
+            } else {
+                print("Failed Validation, AverageWrongIndex:", AverageWrongIndex, "MaxWrongIndex:", MaxWrongIndex)
+            }
+            
+            CR.CleanTheBrain(B: B)
+            CurrentOuterIteration += 1
+            print("Finished Validate Outer Iteration: ", CurrentOuterIteration, " ,Inner Iterations Used: ", InnerIterationsUsed)
         }
-        
-        print("Individual Group WrongIndexes: ", IndividualWrongIndexs)
-        
-        let AverageWrongIndex = IndividualWrongIndexs.reduce(0, +) / Float32(IndividualWrongIndexs.count)
-        let MaxWrongIndex = IndividualWrongIndexs.max() ?? 1.0
-
-        if Float(NumOfGroupsGotThisRight) > (0.5 * Float(IndividualWrongIndexs.count)) {
-            print("Passed Validation, AverageWrongIndex:", AverageWrongIndex, "MaxWrongIndex:", MaxWrongIndex)
-        } else {
-            print("Failed Validation, AverageWrongIndex:", AverageWrongIndex, "MaxWrongIndex:", MaxWrongIndex)
-        }
-        
-        CR.CleanTheBrain(B: B)
-        CurrentOuterIteration += 1
-        print("Finished Validate Outer Iteration: ", CurrentOuterIteration, " ,Inner Iterations Used: ", InnerIterationsUsed)
     }
 }
 
-Validify(B: Brain)
+func runTheFuckingCode() {
+    let C = Core()
+    let TV = TrainAndValidate()
+    
+    let Brain = BRAIN()
+    
+    C.InitializeBrain(Brain: Brain)
+    print("Brain initialize completed.")
+    
+    for _ in 0...1000 {
+        TV.Train(B: Brain)
+    }
+    
+    TV.Validify(B: Brain)
+    
+    print("Finished Running.")
+}
 
-print("Finished Running.")
+runTheFuckingCode()

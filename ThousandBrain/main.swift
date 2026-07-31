@@ -6,6 +6,11 @@
 //
 
 //
+//  The Overall Purpose:
+//  I want to create something unsupervised, that is free from over abstraction from our studies from neurons. It should be able to do evolution it self.
+//
+
+//
 // Stage1 GOAL:
 // Make a usable classification model using ThousandBrainTheory (XOR test)
 //
@@ -299,25 +304,33 @@ class CoreCalculations {
         
         
         // DEBUG ONLY
-        for N in G.Neurons {
-            if N.NeuronType == .Output1 {
-                if N.BodyVoltage > -70.0 {
-                    G.Finished = true
-                }
-            }
-        }
+//        for N in G.Neurons {
+//            if N.NeuronType == .Output1 {
+//                if N.BodyVoltage > -70.0 {
+//                    G.Finished = true
+//                }
+//            }
+//        }
     }
     // Wrong Index
+    /// This is total shit, don't use this, not working
+    /// DEBUG ONLY
     func WrongIndexCal(N: Neuron, CorrectAnswer: Float32) -> Float32 {
         let NeuronActivationIndex = 1.0 / (1.0 + exp((-0.1) * (N.BodyVoltage - (0.5*(TestConfig.RestingPotential + TestConfig.ActivatedOnPotential)))))
-        let NeuronActivationIndexNew = 0.5 + 0.5 * NeuronActivationIndex        // maps activation to 0.5...1.0
+//        let NeuronActivationIndexNew = 0.5 + 0.5 * NeuronActivationIndex        // maps activation to 0.5...1.0
         
         // DEBUG ONLY
-        if abs(CorrectAnswer - NeuronActivationIndexNew)*2 <= 0 || abs(CorrectAnswer - NeuronActivationIndexNew)*2 >= 1 {
+//        if abs(CorrectAnswer - NeuronActivationIndexNew)*2 <= 0 || abs(CorrectAnswer - NeuronActivationIndexNew)*2 >= 1 {
+//            print("WrongIndexCal out of range.")
+//        }
+//        
+//        return abs(CorrectAnswer - NeuronActivationIndexNew)*2
+        
+        if abs(CorrectAnswer - NeuronActivationIndex) <= 0 || abs(CorrectAnswer - NeuronActivationIndex) >= 1 {
             print("WrongIndexCal out of range.")
         }
         
-        return abs(CorrectAnswer - NeuronActivationIndexNew)*2
+        return abs(CorrectAnswer - NeuronActivationIndex)
     }
 }
 
@@ -538,7 +551,7 @@ func runTheFuckingCode() {
     C.InitializeBrain(Brain: Brain)
     print("Brain initialize completed.")
     
-    for _ in 0...1000 {
+    for _ in 0...1 {
         TV.Train(B: Brain)
     }
     

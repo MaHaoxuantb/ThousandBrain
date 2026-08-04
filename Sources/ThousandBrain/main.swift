@@ -34,7 +34,7 @@ class Core {
 
 
     // Init function
-    func InitializeBrain(Brain: BRAIN) {
+    func InitializeBrain(Brain: BRAIN, BrainConfig: BRAIN.BrainConfig) {
         Brain.Groups = (1...TestConfig.NumberOfGroupsInABrain).map { _ in
             Group()
         }
@@ -60,29 +60,41 @@ class Core {
                 }
             }
 
-            // Randomly choose input1, input2 and output1 neuron
-            for OneNeuronType in NeuronType.allCases {
-                var ThereIsOneThisNeuronType: Bool = false
-                while !ThereIsOneThisNeuronType {
-                    for OneNeuron in ThisGroup.Neurons {
-                        if OneNeuron.NeuronType == .Normal {
-                            let RandomNumber: Float = Float.random(in: 0.0...1.0)
-                            if RandomNumber < 1.0 / Float(TestConfig.NumberOfNeuronsInAGroup) {
-                                OneNeuron.NeuronType = OneNeuronType
-                                // Lower Leakage for Output Neurons
-                                if OneNeuronType == .Output1 {
-                                    OneNeuron.MembraneTimeConstant = 100
+            // Randomly choose input output neuron, how to choose actually doesn't matter
+            for OneNeuronType in [NeuronType.Input, NeuronType.Output] {
+                var TotalNumberInThisType: Int = -1
+                if OneNeuronType == .Input {
+                    TotalNumberInThisType = BrainConfig.NumberOfInputs
+                } else if OneNeuronType == .Output {
+                    TotalNumberInThisType = BrainConfig.NumberOfOutputs
+                }
+                for SequenceNumber in 0...TotalNumberInThisType-1 {
+                    var ThereIsOneThisNeuronType: Bool = false
+                    while !ThereIsOneThisNeuronType {
+                        for OneNeuron in ThisGroup.Neurons {
+                            if OneNeuron.NeuronType == .Normal {
+                                let RandomNumber: Float = Float.random(in: 0.0...1.0)
+                                if RandomNumber < 1.0 / Float(TestConfig.NumberOfNeuronsInAGroup) {
+                                    OneNeuron.NeuronType = OneNeuronType
+                                    // Lower Leakage for Output Neurons
+                                    if OneNeuronType == .Output {
+                                        OneNeuron.MembraneTimeConstant = 100
+                                    }
+                                    OneNeuron.InputOutputSequenceNumber = SequenceNumber
                                 }
-                            }
-                            if CalculateTotalNumberOfSpecificNeuronType(Neurons: ThisGroup.Neurons, Type: OneNeuronType) > 0
-                            {
-                                ThereIsOneThisNeuronType = true
-                                break
+                                if CalculateTotalNumberOfSpecificNeuronType(Neurons: ThisGroup.Neurons, Type: OneNeuronType) > 0
+                                {
+                                    ThereIsOneThisNeuronType = true
+                                    break
+                                }
                             }
                         }
                     }
                 }
             }
+            
+            // Give correct initialization to TotalFiringByOutputNeuronsInObservationPhase
+            ThisGroup.TotalFiringByOutputNeuronsInObservationPhase = Array(repeating: 0, count: BrainConfig.NumberOfOutputs)
         }
 
         func CalculateTotalNumberOfSpecificNeuronType(Neurons: [Neuron], Type: NeuronType)
@@ -115,8 +127,8 @@ class Core {
                 OneNeuron.LastAPTime = CurrentInnerIteration
                 NewTotalNumberOfAPFired += 1
                 if InObservationPhase {
-                    if OneNeuron.NeuronType == NeuronType.Output1 {
-                        Group.TotalFiringByOutputNeuronsInObservationPhase += 1
+                    if OneNeuron.NeuronType == NeuronType.Output {
+                        Group.TotalFiringByOutputNeuronsInObservationPhase[OneNeuron.InputOutputSequenceNumber] += 1
                     }
                 }
             }
@@ -133,6 +145,13 @@ class Core {
                         OneNeuron.BodyVoltage += VoltageIncrement
                         NewTotalEnergyLeft -= VoltageIncrement
                     }
+                }
+            }
+            // Handle InputNeuron firing
+            if OneNeuron.NeuronType == .Input {
+                // Times 2 is to regulate, even the frequency is 1.0 should fire with intervals
+                if Float32.random(in: 0.0...1.0)*2 < OneNeuron.InputFiringPossibility {
+                    OneNeuron.BodyVoltage += OneNeuron.HighestInputFiring
                 }
             }
             // So we need to get the total leak first, for each neuron
@@ -170,43 +189,14 @@ class Core {
             OneNeuron.BodyVoltage -= TotalLeak
         }
 
-        // Next, Move the incoming potential to the body potential
-//        for OneNeuron in Group.Neurons {
-//            OneNeuron.BodyVoltage += OneNeuron.IncomingPotential
-//            OneNeuron.BodyVoltage = 0.0
-//        }
-
         return (NewTotalNumberOfAPFired, NewTotalEnergyLeft)
     }
 
     // One Inner Iteration
     func OneInnerIteration(B: BRAIN, CurrentInnerIteration: Int64, TotalEnergyLeft: Float32, InObservationPhase: Bool) -> Float32 {
-//        var AllGroupsFinished: Bool = true
-//        var TotalHeat: Float64 = 0.0
         var TotalNumberOfAPFired: Int64 = 0
-        var TotalNumberOfUnfinishedGroups: Int = 0
         var NewTotalEnergyLeft: Float32 = TotalEnergyLeft
-//        for Group in B.Groups {
-//            if !Group.Finished {
-//                AllGroupsFinished = false
-//                TotalEnergyLeft = OneSingleIteration(
-//                    Group: Group,
-//                    CurrentInnerIteration: CurrentInnerIteration,
-//                    TotalNumberOfAPFired: &TotalNumberOfAPFired,
-//                    TotalEnergyLeft: TotalEnergyLeft
-//                )
-//                // Move incoming potential to body potential
-//                for Neuron in Group.Neurons {
-//                    Neuron.BodyVoltage += Neuron.IncomingPotential
-//                    Neuron.IncomingPotential = 0.0
-//                }
-//                CoreCals.HeatCal(G: Group)
-//                TotalHeat += Float64(Group.Heat)
-//                TotalNumberOfUnfinishedGroups += 1
-//            }
-//        }
         parallelForEach(B.Groups, workerCount: 4) { Group in
-//            AllGroupsFinished = false
             (TotalNumberOfAPFired, NewTotalEnergyLeft) = self.OneSingleIteration(
                 Group: Group,
                 CurrentInnerIteration: CurrentInnerIteration,
@@ -219,34 +209,6 @@ class Core {
                 Neuron.BodyVoltage += Neuron.IncomingPotential
                 Neuron.IncomingPotential = 0.0
             }
-
-//            self.CoreCals.HeatCal(G: Group)
-//            TotalHeat += Float64(Group.Heat)
-//            TotalNumberOfUnfinishedGroups += 1
-
-//            if !Group.Finished {
-//                AllGroupsFinished = false
-//                (TotalNumberOfAPFired, NewTotalEnergyLeft) = self.OneSingleIteration(
-//                    Group: Group,
-//                    CurrentInnerIteration: CurrentInnerIteration,
-//                    TotalNumberOfAPFired: TotalNumberOfAPFired,
-//                    TotalEnergyLeft: TotalEnergyLeft
-//                )
-//                // Move incoming potential to body potential
-//                for Neuron in Group.Neurons {
-//                    Neuron.BodyVoltage += Neuron.IncomingPotential
-//                    Neuron.IncomingPotential = 0.0
-//                }
-//                self.CoreCals.HeatCal(G: Group)
-//                TotalHeat += Float64(Group.Heat)
-//                TotalNumberOfUnfinishedGroups += 1
-//            }
-        }
-//        B.TotalHeat = TotalHeat
-        if TestConfig.DEBUG {
-            print(
-                "Total AP Fired: ", TotalNumberOfAPFired, ", Total Number of unfinished groups: ",
-                TotalNumberOfUnfinishedGroups)
         }
         return NewTotalEnergyLeft
     }
@@ -305,56 +267,24 @@ class CoreCalculations {
         if leak < 0.0 { leak = 0.0 }
         return leak
     }
-    // Core Heat function
-    // Used to check the total energy of a group, that could be used to check if the iterations stops
-//    func HeatCal(G: Group) {
-//        // TotalEnergy
-//        var TotalEnergy: Float32 = 0.0
-//        for Neuron in G.Neurons {
-//            if Neuron.NeuronType != .Output1 {  // Output is used for incrementing, not doing this
-//                TotalEnergy += Neuron.BodyVoltage
-//            }
-//        }
-//        // Threshold
-//        var ReachedThreshold: Bool = false
-//        let Threshold: Float32 =
-//            TestConfig.StopHeatThreshold * Float32(TestConfig.NumberOfNeuronsInAGroup)
-//        if TotalEnergy < Threshold {
-//            ReachedThreshold = true
-//        }
-//        G.Finished = ReachedThreshold
-//        G.Heat = TotalEnergy
-//
-//
-//        // DEBUG ONLY
-////        for N in G.Neurons {
-////            if N.NeuronType == .Output1 {
-////                if N.BodyVoltage > -70.0 {
-////                    G.Finished = true
-////                }
-////            }
-////        }
-//    }
+    
     // Wrong Index
-    /// This is total shit, don't use this, not working
-    /// DEBUG ONLY
-//    func WrongIndexCal(N: Neuron, CorrectAnswer: Float32) -> Float32 {
-//        let NeuronActivationIndex = 1.0 / (1.0 + exp((-0.1) * (N.BodyVoltage - (0.5*(TestConfig.RestingPotential + TestConfig.ActivatedOnPotential)))))
-////        let NeuronActivationIndexNew = 0.5 + 0.5 * NeuronActivationIndex        // maps activation to 0.5...1.0
-//
-//        // DEBUG ONLY
-////        if abs(CorrectAnswer - NeuronActivationIndexNew)*2 <= 0 || abs(CorrectAnswer - NeuronActivationIndexNew)*2 >= 1 {
-////            print("WrongIndexCal out of range.")
-////        }
-////
-////        return abs(CorrectAnswer - NeuronActivationIndexNew)*2
-//
-//        if abs(CorrectAnswer - NeuronActivationIndex) < 0 || abs(CorrectAnswer - NeuronActivationIndex) > 1 {
-//            print("WrongIndexCal out of range.")
-//        }
-//
-//        return abs(CorrectAnswer - NeuronActivationIndex)
-//    }
+    func WrongIndexCal(G: Group, CorrectAnswers: [Float32]) -> Float32 {
+        var TotalWrongIndex: Float32 = 0.0
+        let TotalNumberOfOutputs: Int = G.TotalFiringByOutputNeuronsInObservationPhase.count
+        if TotalNumberOfOutputs != CorrectAnswers.count { // Should be the same
+            print("Error code 102384985")
+            return 1.0
+        }
+        for Num in 0...TotalNumberOfOutputs-1 {
+            // Statistics used in the formulae
+            let MeanFiring: Float32 = 20.0
+            let FiringSpan: Float32 = 10.0
+            let FiringScenario: Float32 = 1.0 / (1.0 + exp(-(Float32(G.TotalFiringByOutputNeuronsInObservationPhase[Num]) - MeanFiring)/FiringSpan))
+            TotalWrongIndex += abs(CorrectAnswers[Num] - FiringScenario)
+        }
+        return TotalWrongIndex/Float32(TotalNumberOfOutputs)
+    }
 }
 
 //MARK: -Core Learning
@@ -384,9 +314,9 @@ class CoreLearning {
         if WrongIndex > 0.25 {
             for N in G.Neurons {
                 for A in N.LowerAxons {
-                    A.ConnectionStrength -= A.ConnectionStrength * WrongIndex
-                    if A.ConnectionStrength <= 0 {
-                        print("This strength went less than zero, with WrongIndex of: ", WrongIndex, "and the connection strength of (now):", A.ConnectionStrength)
+                    while true {
+                        A.ConnectionStrength -= A.ConnectionStrength * WrongIndex * Float32.random(in: -0.099999...0.999999)
+                        if (0 < A.ConnectionStrength && A.ConnectionStrength < 1) { break }
                     }
                 }
             }
@@ -394,8 +324,8 @@ class CoreLearning {
             for N in G.Neurons {
                 for A in N.LowerAxons {
                     while true {
-                        A.ConnectionStrength += A.ConnectionStrength * (1 - WrongIndex)
-                        if (A.ConnectionStrength < 1) { break }
+                        A.ConnectionStrength += A.ConnectionStrength * (1 - WrongIndex) * Float32.random(in: -0.099999...0.999999)
+                        if (0 < A.ConnectionStrength && A.ConnectionStrength < 1) { break }
                     }
                 }
             }
@@ -409,19 +339,7 @@ class CoreRun {
     let C = Core()
     let SG = SafeGuard()
 
-    func InitializeInputs(B: BRAIN, TrainDataSet: [NeuronType: Float32]) {
-        for G in B.Groups {
-            for N in G.Neurons {
-                var Activation: Float32 = 0.5
-                if (N.NeuronType != .Normal) && (N.NeuronType != .Output1) {
-                    Activation = 1 - TrainDataSet[N.NeuronType]!
-                }
-                N.BodyVoltage = TestConfig.RestingPotential * Activation
-            }
-        }
-    }
-
-    func RunInnerIterations(B: BRAIN) -> Int64 {
+    func RunInnerIterations(B: BRAIN) {
         // Start Iteration
         var CurrentInnerIteration: Int64 = 0
 //        var AllGroupsFinished: Bool = false
@@ -439,25 +357,15 @@ class CoreRun {
                 TotalEnergyLeft: TotalEnergyLeft,
                 InObservationPhase: InObservationPhase
             )
-//            if TestConfig.DEBUG {
-//                print("Finished Iteration: ", CurrentInnerIteration, "Brain Total Heat: ", B.TotalHeat)
-//            }
-//            if CurrentInnerIteration >= TestConfig.MaxInnerIterations {
-//                print("Break from Inner Iterations reached Maximum")
-//                break
-//            }
-            if SG.ConnectionStrength(B: B) {
+            if !SG.ConnectionStrength(B: B) {
                 print("SafeGuard Error. At inner iteration: ", CurrentInnerIteration)
             }
         }
-        return CurrentInnerIteration
     }
 
     func CleanTheBrain(B: BRAIN) {
         for G in B.Groups {
-//            G.Finished = false
-//            G.Heat = 0.0
-            G.TotalFiringByOutputNeuronsInObservationPhase = 0
+            G.TotalFiringByOutputNeuronsInObservationPhase = [0]
             for N in G.Neurons {
                 N.BodyVoltage = 0.0
                 N.IncomingPotential = 0.0
@@ -477,35 +385,52 @@ class TrainAndValidate {
     let CL = CoreLearning()
     let CoreCals = CoreCalculations()
 
-    func Train(B: BRAIN) {
+    func TrainOrValidate(B: BRAIN, IsValidation: Bool, RunDataSet: TrainValidateDataSet) {
         // Outer Iterations
-        let TD = TrainData()
         var CurrentOuterIteration: Int64 = 0
-        for TrainDataSet in TD.TrainDataSets {
-            // Initialize the Input Neurons
-            CR.InitializeInputs(B: B, TrainDataSet: TrainDataSet)
-
+        for OneDataSet in RunDataSet.DataSets {
             // Inner Iteration to get the result
-            let InnerIterationsUsed = CR.RunInnerIterations(B: B)
-
+            CR.RunInnerIterations(B: B)
+            
+            // Used only when validating
+            /// Put here to avoid Swift syntax check problem
+            var IndividualWrongIndexs: [Float32] = []
+            var NumOfGroupsGotThisRight: Int = 0
+            
             // Punish all groups that get the thing wrong accordingly
             // Just Random the connections for all groups
             for G in B.Groups {
                 // First check how right the group is
                 var WrongIndex: Float32 = 0.0
-                let CorrectAnswer: Float32 = TrainDataSet[.Output1]!
-                for N in G.Neurons {
-                    if N.NeuronType == .Output1 {
-                        WrongIndex = CoreCals.WrongIndexCal(N: N, CorrectAnswer: CorrectAnswer)
+                let CorrectAnswers: [Float32] = OneDataSet[.Output]!
+                WrongIndex = CoreCals.WrongIndexCal(G: G, CorrectAnswers: CorrectAnswers)
+                if !IsValidation { /// In training
+                    // Randomnize Accordingly
+                    CL.InhibitionLearning(G: G, WrongIndex: WrongIndex)
+                } else { /// In validation
+                    IndividualWrongIndexs.append(WrongIndex)
+                    if WrongIndex <= 0.25 {
+                        NumOfGroupsGotThisRight += 1
                     }
                 }
-                // Randomnize Accordingly
-                CL.InhibitionLearning(G: G, WrongIndex: WrongIndex)
+            }
+            
+            if IsValidation {
+                print("Individual Group WrongIndexes: ", IndividualWrongIndexs)
+
+                let AverageWrongIndex = IndividualWrongIndexs.reduce(0, +) / Float32(IndividualWrongIndexs.count)
+                let MaxWrongIndex = IndividualWrongIndexs.max() ?? 1.0
+
+                if Float(NumOfGroupsGotThisRight) > (0.5 * Float(IndividualWrongIndexs.count)) {
+                    print("Passed Validation, AverageWrongIndex:", AverageWrongIndex, "MaxWrongIndex:", MaxWrongIndex)
+                } else {
+                    print("Failed Validation, AverageWrongIndex:", AverageWrongIndex, "MaxWrongIndex:", MaxWrongIndex)
+                }
             }
 
             CR.CleanTheBrain(B: B)
             CurrentOuterIteration += 1
-            print("Finished Outer Iteration: ", CurrentOuterIteration, " ,Inner Iterations Used: ", InnerIterationsUsed)
+            print("Finished Outer Iteration: ", CurrentOuterIteration)
 
             // Testing for the neuron connection strength problem
             //        for G in B.Groups {
@@ -519,57 +444,6 @@ class TrainAndValidate {
             //        }
         }
     }
-
-
-    //MARK: - Validify
-    func Validify(B: BRAIN) {
-        // Outer Iterations
-        let VD = ValidationData()
-        var CurrentOuterIteration: Int64 = 0
-        for TrainDataSet in VD.TrainDataSets {
-            // Initialize the Input Neurons
-            CR.InitializeInputs(B: B, TrainDataSet: TrainDataSet)
-
-            // Inner Iteration to get the result
-            let InnerIterationsUsed = CR.RunInnerIterations(B: B)
-
-            // Check If Correct
-            var IndividualWrongIndexs: [Float32] = []
-            var NumOfGroupsGotThisRight: Int = 0
-            for Type in NeuronType.allCases {
-                if String(describing: Type).hasPrefix("Ou") { // Start with OU is output
-                    let CorrectAnswer: Float32 = TrainDataSet[Type]!
-                    for G in B.Groups {
-                        // First check how right the group is
-                        for N in G.Neurons {
-                            if N.NeuronType == .Output1 {
-                                let ThisWrongIndex = CoreCals.WrongIndexCal(N: N, CorrectAnswer: CorrectAnswer)
-                                IndividualWrongIndexs.append(ThisWrongIndex)
-                                if ThisWrongIndex < 0.25 {
-                                    NumOfGroupsGotThisRight += 1
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            print("Individual Group WrongIndexes: ", IndividualWrongIndexs)
-
-            let AverageWrongIndex = IndividualWrongIndexs.reduce(0, +) / Float32(IndividualWrongIndexs.count)
-            let MaxWrongIndex = IndividualWrongIndexs.max() ?? 1.0
-
-            if Float(NumOfGroupsGotThisRight) > (0.5 * Float(IndividualWrongIndexs.count)) {
-                print("Passed Validation, AverageWrongIndex:", AverageWrongIndex, "MaxWrongIndex:", MaxWrongIndex)
-            } else {
-                print("Failed Validation, AverageWrongIndex:", AverageWrongIndex, "MaxWrongIndex:", MaxWrongIndex)
-            }
-
-            CR.CleanTheBrain(B: B)
-            CurrentOuterIteration += 1
-            print("Finished Validate Outer Iteration: ", CurrentOuterIteration, " ,Inner Iterations Used: ", InnerIterationsUsed)
-        }
-    }
 }
 
 func runTheFuckingCode() {
@@ -577,15 +451,17 @@ func runTheFuckingCode() {
     let TV = TrainAndValidate()
 
     let Brain = BRAIN()
+    
+    let RunData = ThreeInputBooleanClassificationDataset()
 
-    C.InitializeBrain(Brain: Brain)
-    print("Brain initialize completed.")
+    C.InitializeBrain(Brain: Brain, BrainConfig: BRAIN.BrainConfig(NumberOfInputs: RunData.NumberOfInputs, NumberOfOutputs: RunData.NumberOfOutputs))
+    print("Brain initialization completed.")
 
-    for _ in 0...1 {
-        TV.Train(B: Brain)
+    for _ in 1...5 {
+        TV.TrainOrValidate(B: Brain, IsValidation: false, RunDataSet: RunData.TrainData)
     }
 
-    TV.Validify(B: Brain)
+    TV.TrainOrValidate(B: Brain, IsValidation: true, RunDataSet: RunData.ValidationData)
 
     print("Finished Running.")
 }

@@ -14,13 +14,10 @@ class Config {
     let ActivatedOnPotential: Float32 = 20.0  // The maximium potential used in the lost fuction
     /// Manual
     let LeakRateMultiplier: Float = 1.0  // This is due to discrete time, we have to have a multiplier to deal with this
-    let TotalBrainEnergy: Float32 = 10000.0 // Total mV could be used by the whole brain
-    /// Input output
-    let ActiveInputHigh: [Float32] = [0.0, 1.0]
-    let ActiveInputLow: [Float32] = [0.0, 0.0, 0.0, 0.0, 1.0]
+    let TotalBrainEnergy: Float32 = 1000000.0 // Total mV could be used by the whole brain
     
     // Durations
-    let WorkPhaseDuration: Int = 20
+    let WorkPhaseDuration: Int = 40
     let OvservationPhaseDuration: Int = 100
     
     // Learn

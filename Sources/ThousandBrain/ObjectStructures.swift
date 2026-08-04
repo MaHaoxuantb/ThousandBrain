@@ -18,6 +18,7 @@ class Axon {
 class Neuron {
     var id: UUID
     var NeuronType: NeuronType
+    var InputOutputSequenceNumber: Int
     var LowerAxons: [Axon]
     var IncomingPotential: Float32
     var BodyVoltage: Float32
@@ -27,11 +28,13 @@ class Neuron {
     var ActiveDischargeTimePoint: Int8
     var ActiveDischargeInputSimulateCurve: [Float32]  // Use extra input to simulate the active discharge (AP)
     var LastAPTime: Int64
-    var InputFiring
+    var InputFiringPossibility: Float  // Use for InputNeurons only
+    var HighestInputFiring: Float32  // Use for InputNeurons only
 
     init() {
         self.id = UUID()
         self.NeuronType = .Normal
+        self.InputOutputSequenceNumber = -1
         self.LowerAxons = []
         self.IncomingPotential = 0.0
         self.BodyVoltage = TestConfig.RestingPotential  // mV, starting at resting potential
@@ -41,6 +44,8 @@ class Neuron {
         self.ActiveDischargeTimePoint = 0
         self.ActiveDischargeInputSimulateCurve = [30, 20, 5, 0, 0, 0, 0]
         self.LastAPTime = 0
+        self.InputFiringPossibility = -1.0
+        self.HighestInputFiring = Float32.random(in: 60.0...80.0)
     }
 
     enum NeuronState: Hashable {
@@ -51,10 +56,8 @@ class Neuron {
 
 enum NeuronType: Hashable, CaseIterable {
     case Normal
-    case Input1
-    case Input2
-    case Input3
-    case Output1
+    case Input
+    case Output
 }
 
 class Group {
@@ -62,14 +65,14 @@ class Group {
     var Neurons: [Neuron]
 //    var Finished: Bool
 //    var Heat: Float32
-    var TotalFiringByOutputNeuronsInObservationPhase: Int32
+    var TotalFiringByOutputNeuronsInObservationPhase: [Int32]
 
     init() {
         self.id = UUID()
         self.Neurons = []
 //        self.Finished = false
 //        self.Heat = 0.0
-        self.TotalFiringByOutputNeuronsInObservationPhase = 0
+        self.TotalFiringByOutputNeuronsInObservationPhase = [0]
     }
 }
 
@@ -79,13 +82,20 @@ class Group {
 // }
 
 class BRAIN {
-    var id: UUID = UUID()
-    var Groups: [Group] = []
+    var id: UUID
+    var Groups: [Group]
+    var config: BrainConfig
 //    var TotalHeat: Float64
 
     init() {
         self.id = UUID()
         self.Groups = []
+        self.config = BrainConfig(NumberOfInputs: 0, NumberOfOutputs: 0)
 //        self.TotalHeat = 0.0
+    }
+    
+    struct BrainConfig {
+        var NumberOfInputs: Int = 0
+        var NumberOfOutputs: Int = 0
     }
 }

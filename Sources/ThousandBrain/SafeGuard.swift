@@ -8,8 +8,8 @@
 import Darwin
 
 class SafeGuard {
-    func ConnectionStrength(B: BRAIN) -> Bool {
-        var TotallyValid = true
+    func ConnectionStrength(B: BRAIN) -> Bool? {
+        var TotallyValid: Bool? = true
         for G in B.Groups {
             for N in G.Neurons {
                 for A in N.LowerAxons {
@@ -22,6 +22,9 @@ class SafeGuard {
                         TotallyValid = false
                         print("SafeGuard: Invalid Connection Strength, over 1")
                         A.ConnectionStrength = 0.9999
+                    } else if !A.ConnectionStrength.isFinite {
+                        assertionFailure("ConnectionStrength became non-finite")
+                        A.ConnectionStrength = 0.5
                     }
                 }
             }

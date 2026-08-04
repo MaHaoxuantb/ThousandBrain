@@ -42,7 +42,7 @@ class Neuron {
         self.APThreshold = -Float32.random(in: 10.0...20.0)
         self.NeuronState = .Normal
         self.ActiveDischargeTimePoint = 0
-        self.ActiveDischargeInputSimulateCurve = [30, 20, 5, 0, 0, 0, 0]
+        self.ActiveDischargeInputSimulateCurve = [30, 20, 5, -10, -15, -10, 0]
         self.LastAPTime = 0
         self.InputFiringPossibility = -1.0
         self.HighestInputFiring = Float32.random(in: 60.0...80.0)

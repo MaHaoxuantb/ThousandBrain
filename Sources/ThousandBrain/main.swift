@@ -80,7 +80,7 @@ class Core {
                                     }
                                     OneNeuron.InputOutputSequenceNumber = SequenceNumber
                                 }
-                                if CalculateTotalNumberOfSpecificNeuronType(Neurons: ThisGroup.Neurons, Type: OneNeuronType) > 0
+                                if CalculateTotalNumberOfSpecificNeuronType(Neurons: ThisGroup.Neurons, Type: OneNeuronType, SequenceNumber: SequenceNumber) > 0
                                 {
                                     ThereIsOneThisNeuronType = true
                                     break
@@ -95,12 +95,12 @@ class Core {
             ThisGroup.TotalFiringByOutputNeuronsInObservationPhase = Array(repeating: 0, count: BrainConfig.NumberOfOutputs)
         }
 
-        func CalculateTotalNumberOfSpecificNeuronType(Neurons: [Neuron], Type: NeuronType)
+        func CalculateTotalNumberOfSpecificNeuronType(Neurons: [Neuron], Type: NeuronType, SequenceNumber: Int)
             -> Int
         {
             var Num: Int = 0
             for OneNeuron in Neurons {
-                if OneNeuron.NeuronType == Type {
+                if (OneNeuron.NeuronType == Type) && (OneNeuron.InputOutputSequenceNumber == SequenceNumber) {
                     Num += 1
                 }
             }
@@ -277,8 +277,8 @@ class CoreCalculations {
         }
         for Num in 0...TotalNumberOfOutputs-1 {
             // Statistics used in the formulae
-            let MeanFiring: Float32 = 20.0
-            let FiringSpan: Float32 = 10.0
+            let MeanFiring: Float32 = TestConfig.MeanFiring
+            let FiringSpan: Float32 = TestConfig.FiringSpan
             let FiringScenario: Float32 = 1.0 / (1.0 + exp(-(Float32(G.TotalFiringByOutputNeuronsInObservationPhase[Num]) - MeanFiring)/FiringSpan))
             TotalWrongIndex += abs(CorrectAnswers[Num] - FiringScenario)
         }
@@ -311,22 +311,16 @@ class CoreLearning {
     // Inhibition for wrong groups' current connections, Prohibition for correct ones.
     func InhibitionLearning(G: Group, WrongIndex: Float32) {
         // for Higher WrongIndex
-        if WrongIndex > 0.25 {
-            for N in G.Neurons {
-                for A in N.LowerAxons {
-                    while true {
-                        A.ConnectionStrength -= A.ConnectionStrength * WrongIndex * Float32.random(in: -0.099999...0.999999)
-                        if (0 < A.ConnectionStrength && A.ConnectionStrength < 1) { break }
+        for N in G.Neurons {
+            for A in N.LowerAxons {
+                let OriginalValue = A.ConnectionStrength
+                while true {
+                    if WrongIndex > 0.25 { // Got it wrong
+                        A.ConnectionStrength = OriginalValue - WrongIndex * Float32.random(in: -0.299999...0.999999)
+                    } else { // Correct
+                        A.ConnectionStrength = OriginalValue + WrongIndex * Float32.random(in: -0.299999...0.999999)
                     }
-                }
-            }
-        } else {    // for Lower WrongIndex
-            for N in G.Neurons {
-                for A in N.LowerAxons {
-                    while true {
-                        A.ConnectionStrength += A.ConnectionStrength * (1 - WrongIndex) * Float32.random(in: -0.099999...0.999999)
-                        if (0 < A.ConnectionStrength && A.ConnectionStrength < 1) { break }
-                    }
+                    if (0 < A.ConnectionStrength && A.ConnectionStrength < 1) { break }
                 }
             }
         }
@@ -358,7 +352,7 @@ class CoreRun {
                 TotalEnergyLeft: TotalEnergyLeft,
                 InObservationPhase: InObservationPhase
             )
-            if !SG.ConnectionStrength(B: B) {
+            if !SG.ConnectionStrength(B: B)! {
                 print("SafeGuard Error. At inner iteration: ", CurrentInnerIteration)
             }
         }
@@ -393,6 +387,7 @@ class CoreRun {
 class TrainValidateCalibrate {
     let CR = CoreRun()
     let CL = CoreLearning()
+    let SG = SafeGuard()
     let CoreCals = CoreCalculations()
 
     func TrainOrValidate(B: BRAIN, IsValidation: Bool, RunDataSet: TrainValidateDataSet) {
@@ -411,6 +406,7 @@ class TrainValidateCalibrate {
             
             // Punish all groups that get the thing wrong accordingly
             // Just Random the connections for all groups
+//            SG.ConnectionStrength(B: B) /// SafeGuard it first
             for G in B.Groups {
                 // First check how right the group is
                 var WrongIndex: Float32 = 0.0
@@ -476,7 +472,7 @@ func runTheFuckingCode() {
     if TestConfig.StatisticalCalibration {
         let RunData = LossFunctionCalibrationData()
         var TotalFiringByOutputNeuronsInObservationPhaseData: [Int32] = []
-        for _ in 1...3 {
+        for _ in 1...5 {
             C.InitializeBrain(Brain: Brain, BrainConfig: BRAIN.BrainConfig(NumberOfInputs: RunData.NumberOfInputs, NumberOfOutputs: RunData.NumberOfOutputs))
             let TempTFBONIOPDData = TVC.CalibrationProcessOnce(B: Brain, RunDataSet: RunData.DataSet)
             for DataPoint in TempTFBONIOPDData {

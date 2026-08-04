@@ -4,7 +4,8 @@ import Foundation
 class Config {
     // RUN
     let DEBUG: Bool = true
-    let StatisticalCalibration: Bool = false
+    let StatisticalCalibration: Bool = true
+    let ShowGraphForCalibration: Bool = true
     /// RunTime
     let UseCores: Int = 10
     /// Brain
@@ -25,6 +26,10 @@ class Config {
     
     // Learn
     let RandomLearningValidRange = 0.25
+    
+    // Cal&Statis
+    let MeanFiring: Float32 = 12.0
+    let FiringSpan: Float32 = 1.0
     
     // RETIRED
 //    let MaxInnerIterations = 1000

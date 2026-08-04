@@ -25,15 +25,13 @@
 import Foundation
 import Dispatch
 
-let TestConfig = Config()
-
 //MARK: -Core
 
 class Core {
     let CoreCals = CoreCalculations()
+    let TestConfig = Config()
 
-
-    // Init function
+    //MARK: -Init function
     func InitializeBrain(Brain: BRAIN, BrainConfig: BRAIN.BrainConfig) {
         Brain.Groups = (1...TestConfig.NumberOfGroupsInABrain).map { _ in
             Group()
@@ -110,7 +108,7 @@ class Core {
         }
     }
 
-    // One Single Iteration for a group
+    //MARK: -One Single Iteration for a group
     func OneSingleIteration(
         Group: Group, CurrentInnerIteration: Int64, InObservationPhase: Bool, TotalNumberOfAPFired: Int64, TotalEnergyLeft: Float32
     ) -> (Int64, Float32) {
@@ -192,11 +190,11 @@ class Core {
         return (NewTotalNumberOfAPFired, NewTotalEnergyLeft)
     }
 
-    // One Inner Iteration
+    //MARK: -One Inner Iteration
     func OneInnerIteration(B: BRAIN, CurrentInnerIteration: Int64, TotalEnergyLeft: Float32, InObservationPhase: Bool) -> Float32 {
         var TotalNumberOfAPFired: Int64 = 0
         var NewTotalEnergyLeft: Float32 = TotalEnergyLeft
-        parallelForEach(B.Groups, workerCount: 4) { Group in
+        parallelForEach(B.Groups, workerCount: TestConfig.UseCores) { Group in
             (TotalNumberOfAPFired, NewTotalEnergyLeft) = self.OneSingleIteration(
                 Group: Group,
                 CurrentInnerIteration: CurrentInnerIteration,
@@ -260,6 +258,7 @@ class Core {
 
 //MARK: -Core Calculations
 class CoreCalculations {
+    let TestConfig = Config()
     // Core Leak function
     func LeakRateCal(N: Neuron, CurrentInnerIteration: Int64) -> Float32 {
         var leak: Float32 = 0.0
@@ -290,6 +289,7 @@ class CoreCalculations {
 //MARK: -Core Learning
 
 class CoreLearning {
+    let TestConfig = Config()
     // Total Random
     func LearnWithRandomnesss(G: Group, WrongIndex: Float32) {
         for N in G.Neurons {
@@ -338,6 +338,7 @@ class CoreLearning {
 class CoreRun {
     let C = Core()
     let SG = SafeGuard()
+    let TestConfig = Config()
 
     func RunInnerIterations(B: BRAIN) {
         // Start Iteration
@@ -362,12 +363,22 @@ class CoreRun {
             }
         }
     }
+    
+    func GetTheBrainReadyForInputs(B: BRAIN, Inputs: [Float32]) {
+        for G in B.Groups {
+            for N in G.Neurons {
+                if N.NeuronType == .Input {
+                    N.InputFiringPossibility = Inputs[N.InputOutputSequenceNumber]
+                }
+            }
+        }
+    }
 
     func CleanTheBrain(B: BRAIN) {
         for G in B.Groups {
             G.TotalFiringByOutputNeuronsInObservationPhase = [0]
             for N in G.Neurons {
-                N.BodyVoltage = 0.0
+                N.BodyVoltage = TestConfig.RestingPotential
                 N.IncomingPotential = 0.0
                 N.NeuronState = .Normal
                 N.LastAPTime = 0
@@ -379,8 +390,7 @@ class CoreRun {
 
 //MARK: -Exec
 
-class TrainAndValidate {
-
+class TrainValidateCalibrate {
     let CR = CoreRun()
     let CL = CoreLearning()
     let CoreCals = CoreCalculations()
@@ -389,6 +399,8 @@ class TrainAndValidate {
         // Outer Iterations
         var CurrentOuterIteration: Int64 = 0
         for OneDataSet in RunDataSet.DataSets {
+            // Init the inputs
+            CR.GetTheBrainReadyForInputs(B: B, Inputs: OneDataSet[.Input]!)
             // Inner Iteration to get the result
             CR.RunInnerIterations(B: B)
             
@@ -431,26 +443,48 @@ class TrainAndValidate {
             CR.CleanTheBrain(B: B)
             CurrentOuterIteration += 1
             print("Finished Outer Iteration: ", CurrentOuterIteration)
-
-            // Testing for the neuron connection strength problem
-            //        for G in B.Groups {
-            //            for N in G.Neurons {
-            //                for A in N.LowerAxons {
-            //                    if A.ConnectionStrength <= 0.0 {
-            //                        print("Something Went wrong")
-            //                    }
-            //                }
-            //            }
-            //        }
         }
+    }
+    
+    func CalibrationProcessOnce(B: BRAIN, RunDataSet: [[NeuronType: [Float32]]]) -> [Int32] {
+        var CurrentOuterIteration: Int64 = 0
+        var TotalFiringByOutputNeuronsInObservationPhaseData: [Int32] = []
+        for OneDataSet in RunDataSet {
+            CR.GetTheBrainReadyForInputs(B: B, Inputs: OneDataSet[.Input]!)
+            CR.RunInnerIterations(B: B)  /// Inner Iteration to get the result
+            for G in B.Groups {
+                for DataPoint in G.TotalFiringByOutputNeuronsInObservationPhase {
+                    TotalFiringByOutputNeuronsInObservationPhaseData.append(DataPoint)
+                }
+            }
+            CR.CleanTheBrain(B: B)
+            CurrentOuterIteration += 1
+            print("[Calibration] Finished Outer Iteration: ", CurrentOuterIteration)
+        }
+        return TotalFiringByOutputNeuronsInObservationPhaseData
     }
 }
 
 func runTheFuckingCode() {
     let C = Core()
-    let TV = TrainAndValidate()
+    let TVC = TrainValidateCalibrate()
+    let TestConfig = Config()
 
     let Brain = BRAIN()
+    
+    // Calibration for the loss function (not loss function exactly)
+    if TestConfig.StatisticalCalibration {
+        let RunData = LossFunctionCalibrationData()
+        var TotalFiringByOutputNeuronsInObservationPhaseData: [Int32] = []
+        for _ in 1...3 {
+            C.InitializeBrain(Brain: Brain, BrainConfig: BRAIN.BrainConfig(NumberOfInputs: RunData.NumberOfInputs, NumberOfOutputs: RunData.NumberOfOutputs))
+            let TempTFBONIOPDData = TVC.CalibrationProcessOnce(B: Brain, RunDataSet: RunData.DataSet)
+            for DataPoint in TempTFBONIOPDData {
+                TotalFiringByOutputNeuronsInObservationPhaseData.append(DataPoint)
+            }
+        }
+        print(TotalFiringByOutputNeuronsInObservationPhaseData)
+    }
     
     let RunData = ThreeInputBooleanClassificationDataset()
 
@@ -458,10 +492,10 @@ func runTheFuckingCode() {
     print("Brain initialization completed.")
 
     for _ in 1...5 {
-        TV.TrainOrValidate(B: Brain, IsValidation: false, RunDataSet: RunData.TrainData)
+        TVC.TrainOrValidate(B: Brain, IsValidation: false, RunDataSet: RunData.TrainData)
     }
 
-    TV.TrainOrValidate(B: Brain, IsValidation: true, RunDataSet: RunData.ValidationData)
+    TVC.TrainOrValidate(B: Brain, IsValidation: true, RunDataSet: RunData.ValidationData)
 
     print("Finished Running.")
 }

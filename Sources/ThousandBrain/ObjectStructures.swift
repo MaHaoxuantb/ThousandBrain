@@ -52,6 +52,8 @@ class Neuron {
         case Normal
         case Cumulating
     }
+    
+    let TestConfig = Config()
 }
 
 enum NeuronType: Hashable, CaseIterable {

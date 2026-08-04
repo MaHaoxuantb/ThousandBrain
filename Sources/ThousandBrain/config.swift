@@ -4,6 +4,9 @@ import Foundation
 class Config {
     // RUN
     let DEBUG: Bool = true
+    let StatisticalCalibration: Bool = false
+    /// RunTime
+    let UseCores: Int = 10
     /// Brain
     let NumberOfGroupsInABrain: Int = 50
     let NumberOfNeuronsInAGroup: Int = 20

@@ -59,14 +59,16 @@ enum NeuronType: Hashable, CaseIterable {
 class Group {
     var id: UUID
     var Neurons: [Neuron]
-    var Finished: Bool
-    var Heat: Float32
+//    var Finished: Bool
+//    var Heat: Float32
+    var TotalFiringByOutputNeuronsInObservationPhase: Int32
 
     init() {
         self.id = UUID()
         self.Neurons = []
-        self.Finished = false
-        self.Heat = 0.0
+//        self.Finished = false
+//        self.Heat = 0.0
+        self.TotalFiringByOutputNeuronsInObservationPhase = 0
     }
 }
 
@@ -78,11 +80,11 @@ class Group {
 class BRAIN {
     var id: UUID = UUID()
     var Groups: [Group] = []
-    var TotalHeat: Float64
+//    var TotalHeat: Float64
 
     init() {
         self.id = UUID()
         self.Groups = []
-        self.TotalHeat = 0.0
+//        self.TotalHeat = 0.0
     }
 }

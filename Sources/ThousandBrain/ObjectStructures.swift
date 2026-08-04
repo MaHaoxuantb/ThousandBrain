@@ -27,6 +27,7 @@ class Neuron {
     var ActiveDischargeTimePoint: Int8
     var ActiveDischargeInputSimulateCurve: [Float32]  // Use extra input to simulate the active discharge (AP)
     var LastAPTime: Int64
+    var InputFiring
 
     init() {
         self.id = UUID()

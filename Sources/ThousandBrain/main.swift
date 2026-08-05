@@ -316,9 +316,9 @@ class CoreLearning {
                 let OriginalValue = A.ConnectionStrength
                 while true {
                     if WrongIndex > 0.25 { // Got it wrong
-                        A.ConnectionStrength = OriginalValue - WrongIndex * Float32.random(in: -0.299999...0.999999)
+                        A.ConnectionStrength = OriginalValue - WrongIndex * Float32.random(in: -0.499999...0.999999)
                     } else { // Correct
-                        A.ConnectionStrength = OriginalValue + WrongIndex * Float32.random(in: -0.299999...0.999999)
+                        A.ConnectionStrength = OriginalValue + WrongIndex * Float32.random(in: -0.499999...0.999999)
                     }
                     if (0 < A.ConnectionStrength && A.ConnectionStrength < 1) { break }
                 }

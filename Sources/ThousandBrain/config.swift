@@ -5,12 +5,13 @@ class Config {
     // RUN
     let DEBUG: Bool = true
     let StatisticalCalibration: Bool = true
-    let ShowGraphForCalibration: Bool = true
+    let ShowGraphForCalibration: Bool = true // Useable when (StatisticalCalibration == true)
     /// RunTime
     let UseCores: Int = 10
+    let EnableExtendedUsage: Bool = true /// Allow the use of things like SwiftUI&charts that could not run on a standard linux machine.
     /// Brain
-    let NumberOfGroupsInABrain: Int = 50
-    let NumberOfNeuronsInAGroup: Int = 20
+    let NumberOfGroupsInABrain: Int = 25
+    let NumberOfNeuronsInAGroup: Int = 25
     
     // Bio
     /// Cell
@@ -21,14 +22,14 @@ class Config {
     let TotalBrainEnergy: Float32 = 1000000.0 // Total mV could be used by the whole brain
     
     // Durations
-    let WorkPhaseDuration: Int = 40
-    let OvservationPhaseDuration: Int = 100
+    let WorkPhaseDuration: Int = 10
+    let OvservationPhaseDuration: Int = 2000
     
     // Learn
     let RandomLearningValidRange = 0.25
     
     // Cal&Statis
-    let MeanFiring: Float32 = 12.0
+    let MeanFiring: Float32 = 11.0
     let FiringSpan: Float32 = 1.0
     
     // RETIRED

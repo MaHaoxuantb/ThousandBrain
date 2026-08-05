@@ -39,13 +39,13 @@ class Neuron {
         self.IncomingPotential = 0.0
         self.BodyVoltage = TestConfig.RestingPotential  // mV, starting at resting potential
         self.MembraneTimeConstant = Float32.random(in: 10.0...50.0)  // ms
-        self.APThreshold = -Float32.random(in: 10.0...20.0)
+        self.APThreshold = Float32.random(in: -10.0...20.0)
         self.NeuronState = .Normal
         self.ActiveDischargeTimePoint = 0
         self.ActiveDischargeInputSimulateCurve = [30, 20, 5, -10, -15, -10, 0]
         self.LastAPTime = 0
         self.InputFiringPossibility = -1.0
-        self.HighestInputFiring = Float32.random(in: 60.0...80.0)
+        self.HighestInputFiring = Float32.random(in: 50.0...80.0)
     }
 
     enum NeuronState: Hashable {

@@ -41,20 +41,26 @@ struct ThreeInputBooleanClassificationDataset: DataSetProtocol {
         self.ValidationData = TrainValidateDataSet(
             DataSetID: UUID(),
             DataSets: [
-                [.Input: [-0.06, -0.50, -0.56], .Output: [0.5]],
-                [.Input: [0.82, -0.04, 0.14], .Output: [1.0]],
-                [.Input: [0.06, 0.76, -0.02], .Output: [1.0]],
-                [.Input: [0.16, 0.02, 0.86], .Output: [1.0]],
+                // One active input -> true
+                [.Input: [0.05, 0.10, 0.90], .Output: [1.0]],
+                [.Input: [0.85, 0.10, 0.05], .Output: [1.0]],
+                [.Input: [0.10, 0.90, 0.15], .Output: [1.0]],
 
-                [.Input: [0.88, 0.74, 0.10], .Output: [0.5]],
-                [.Input: [0.92, 0.00, 0.78], .Output: [0.5]],
-                [.Input: [-0.02, 0.82, 0.84], .Output: [0.5]],
-                [.Input: [0.72, 0.68, 0.76], .Output: [1.0]],
+                // Three active inputs -> true
+                [.Input: [0.85, 0.80, 0.90], .Output: [1.0]],
 
-                [.Input: [0.20, 0.32, 0.40], .Output: [0.5]],
-                [.Input: [0.56, 0.38, 0.28], .Output: [1.0]],
-                [.Input: [0.58, 0.62, 0.24], .Output: [0.5]],
-                [.Input: [0.60, 0.64, 0.66], .Output: [1.0]],
+                // Two active inputs -> false
+                [.Input: [0.90, 0.80, 0.10], .Output: [0.0]],
+                [.Input: [0.90, 0.10, 0.85], .Output: [0.0]],
+                [.Input: [0.10, 0.85, 0.90], .Output: [0.0]],
+
+                // Near decision boundaries
+                [.Input: [0.40, 0.45, 0.05], .Output: [0.0]],
+                [.Input: [0.45, 0.05, 0.50], .Output: [0.0]],
+                [.Input: [0.05, 0.50, 0.45], .Output: [0.0]],
+
+                [.Input: [0.75, 0.10, 0.20], .Output: [1.0]],
+                [.Input: [0.20, 0.75, 0.10], .Output: [1.0]],
             ]
         )
     }

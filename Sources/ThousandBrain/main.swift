@@ -417,7 +417,7 @@ class TrainValidateCalibrate {
                     CL.InhibitionLearning(G: G, WrongIndex: WrongIndex)
                 } else { /// In validation
                     IndividualWrongIndexs.append(WrongIndex)
-                    if WrongIndex <= 0.25 {
+                    if WrongIndex <= 0.50 {
                         NumOfGroupsGotThisRight += 1
                     }
                 }
@@ -459,9 +459,34 @@ class TrainValidateCalibrate {
         }
         return TotalFiringByOutputNeuronsInObservationPhaseData
     }
+    
+    func PlotCalibrationData(TotalFiringByOutputNeuronsInObservationPhaseData: [Int32]) {
+        let MinDataPoint: Int = Int(TotalFiringByOutputNeuronsInObservationPhaseData.min()!)
+        let MaxDataPoint: Int = Int(TotalFiringByOutputNeuronsInObservationPhaseData.max()!)
+        var ChartData: [(Int32, Int32)] = Array(
+            repeating: (Int32(0),Int32(0)),
+            count: MaxDataPoint - MinDataPoint 
+        )
+        for ChartDataCounter in 0...ChartData.count-1 {
+            ChartData[ChartDataCounter].0 = Int32(MinDataPoint + ChartDataCounter)
+        }
+        for SourceDataPoint in TotalFiringByOutputNeuronsInObservationPhaseData {
+            for ChartDataPointCounter in 0...ChartData.count-1 {
+                if ChartData[ChartDataPointCounter].0 == SourceDataPoint {
+                    ChartData[ChartDataPointCounter].1 += 1
+                }
+            }
+        }
+        let BCV = BarChartViewer()
+        BCV.OpenBarChart(title: "test", data: ChartData)
+    }
 }
 
+
+//MARK: -runTheFuckingCode
 func runTheFuckingCode() {
+    print("©2026 ThomasB. Project Neuro, ThousandBrain.")
+    
     let C = Core()
     let TVC = TrainValidateCalibrate()
     let TestConfig = Config()
@@ -479,15 +504,24 @@ func runTheFuckingCode() {
                 TotalFiringByOutputNeuronsInObservationPhaseData.append(DataPoint)
             }
         }
-        print(TotalFiringByOutputNeuronsInObservationPhaseData)
+        let DataAverage: Float
+            = Float(TotalFiringByOutputNeuronsInObservationPhaseData.reduce(0, +)) / Float(TotalFiringByOutputNeuronsInObservationPhaseData.count)
+        let DataRange: Int32
+            = TotalFiringByOutputNeuronsInObservationPhaseData.max()! - TotalFiringByOutputNeuronsInObservationPhaseData.min()!
+        print("[Calibration data summary] Average: ", DataAverage, ", Range: ", DataRange)
+        print("[Calibration data]: ", TotalFiringByOutputNeuronsInObservationPhaseData)
+        if TestConfig.ShowGraphForCalibration {
+            TVC.PlotCalibrationData(TotalFiringByOutputNeuronsInObservationPhaseData: TotalFiringByOutputNeuronsInObservationPhaseData)
+        }
     }
     
+    // Normal Run
     let RunData = ThreeInputBooleanClassificationDataset()
 
     C.InitializeBrain(Brain: Brain, BrainConfig: BRAIN.BrainConfig(NumberOfInputs: RunData.NumberOfInputs, NumberOfOutputs: RunData.NumberOfOutputs))
     print("Brain initialization completed.")
 
-    for _ in 1...5 {
+    for _ in 1...20 {
         TVC.TrainOrValidate(B: Brain, IsValidation: false, RunDataSet: RunData.TrainData)
     }
 

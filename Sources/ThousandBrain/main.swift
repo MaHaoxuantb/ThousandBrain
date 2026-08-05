@@ -194,7 +194,7 @@ class Core {
     func OneInnerIteration(B: BRAIN, CurrentInnerIteration: Int64, TotalEnergyLeft: Float32, InObservationPhase: Bool) -> Float32 {
         var TotalNumberOfAPFired: Int64 = 0
         var NewTotalEnergyLeft: Float32 = TotalEnergyLeft
-        parallelForEach(B.Groups, workerCount: TestConfig.UseCores) { Group in
+        parallelForEach(B.Groups, workerCount: TestConfig.UseThreads) { Group in
             (TotalNumberOfAPFired, NewTotalEnergyLeft) = self.OneSingleIteration(
                 Group: Group,
                 CurrentInnerIteration: CurrentInnerIteration,

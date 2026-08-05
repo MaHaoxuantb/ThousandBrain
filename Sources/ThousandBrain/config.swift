@@ -7,7 +7,7 @@ class Config {
     let StatisticalCalibration: Bool = true
     let ShowGraphForCalibration: Bool = true // Useable when (StatisticalCalibration == true)
     /// RunTime
-    let UseCores: Int = 10
+    let UseThreads: Int = 10
     let EnableExtendedUsage: Bool = true /// Allow the use of things like SwiftUI&charts that could not run on a standard linux machine.
     /// Brain
     let NumberOfGroupsInABrain: Int = 25
@@ -23,7 +23,7 @@ class Config {
     
     // Durations
     let WorkPhaseDuration: Int = 10
-    let OvservationPhaseDuration: Int = 2000
+    let OvservationPhaseDuration: Int = 1000
     
     // Learn
     let RandomLearningValidRange = 0.25

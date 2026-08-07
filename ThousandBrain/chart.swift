@@ -4,6 +4,10 @@
 //
 //  Created by Thomas B on 8/4/26.
 //
+//  Might involve codes written by AI
+//
+
+#if os(macOS)
 
 import SwiftUI
 import Charts
@@ -103,3 +107,5 @@ final class BarChartViewer {
         }
     }
 }
+
+#endif

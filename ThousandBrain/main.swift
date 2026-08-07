@@ -25,11 +25,12 @@
 import Foundation
 import Dispatch
 
+let TestConfig = Config()
+
 //MARK: -Core
 
 class Core {
     let CoreCals = CoreCalculations()
-    let TestConfig = Config()
 
     //MARK: -Init function
     func InitializeBrain(Brain: BRAIN, BrainConfig: BRAIN.BrainConfig) {
@@ -258,7 +259,6 @@ class Core {
 
 //MARK: -Core Calculations
 class CoreCalculations {
-    let TestConfig = Config()
     // Core Leak function
     func LeakRateCal(N: Neuron, CurrentInnerIteration: Int64) -> Float32 {
         var leak: Float32 = 0.0
@@ -289,7 +289,6 @@ class CoreCalculations {
 //MARK: -Core Learning
 
 class CoreLearning {
-    let TestConfig = Config()
     // Total Random
     func LearnWithRandomnesss(G: Group, WrongIndex: Float32) {
         for N in G.Neurons {
@@ -316,9 +315,9 @@ class CoreLearning {
                 let OriginalValue = A.ConnectionStrength
                 while true {
                     if WrongIndex > 0.25 { // Got it wrong
-                        A.ConnectionStrength = OriginalValue - WrongIndex * Float32.random(in: -0.499999...0.999999)
+                        A.ConnectionStrength = OriginalValue - WrongIndex * Float32.random(in: -0.799999...0.999999)
                     } else { // Correct
-                        A.ConnectionStrength = OriginalValue + WrongIndex * Float32.random(in: -0.499999...0.999999)
+                        A.ConnectionStrength = OriginalValue + WrongIndex * Float32.random(in: -0.799999...0.999999)
                     }
                     if (0 < A.ConnectionStrength && A.ConnectionStrength < 1) { break }
                 }
@@ -332,7 +331,6 @@ class CoreLearning {
 class CoreRun {
     let C = Core()
     let SG = SafeGuard()
-    let TestConfig = Config()
 
     func RunInnerIterations(B: BRAIN) {
         // Start Iteration
@@ -477,8 +475,75 @@ class TrainValidateCalibrate {
                 }
             }
         }
+        if TestConfig.UseDynamicStatisticalCalibrationData {
+            let (DataMean, DataSpan) = CalibrationDataFitCurve(FrequencyData: ChartData)
+            TestConfig.MeanFiring = Float32(DataMean)
+            TestConfig.FiringSpan = Float32(DataSpan)
+        }
+        // Show Chart
         let BCV = BarChartViewer()
         BCV.OpenBarChart(title: "test", data: ChartData)
+    }
+    
+    func CalibrationDataFitCurve(FrequencyData: [(Int32, Int32)]) -> (Float64, Float64) {
+        do {
+            // 1. Convert counts to histogram/frequency-density information.
+            let bins = try FrequencyDensityConverter.convert(FrequencyData)
+
+            print("Observed frequency densities:")
+
+            for bin in bins {
+                print(
+                    """
+                    x: \(bin.value),
+                    frequency: \(bin.frequency),
+                    width: \(bin.binWidth),
+                    frequency density: \(bin.frequencyDensity),
+                    probability density: \(bin.probabilityDensity)
+                    """
+                )
+            }
+
+            // 2. Fit the logistic PDF using weighted maximum likelihood.
+            let fit = try LogisticCurveFitter.fit(FrequencyData)
+
+            let fittedDistribution = fit.distribution
+
+            print("\nFit result:")
+            print("Mean:", fittedDistribution.mean)
+            print("Span:", fittedDistribution.span)
+            print("Loss:", fit.loss)
+            print("Iterations:", fit.iterations)
+            print("Converged:", fit.converged)
+
+            // 3. Compare the observed density with the fitted PDF.
+            let fittedPoints = LogisticCurveFitter.fittedCurve(
+                from: bins,
+                using: fittedDistribution
+            )
+
+            print("\nObserved versus fitted density:")
+
+            for point in fittedPoints {
+                print(
+                    "x: \(point.x), "
+                    + "observed: \(point.observedDensity), "
+                    + "fitted: \(point.fittedDensity)"
+                )
+            }
+
+            // 4. Evaluate the fitted distribution at any chosen x.
+            let x = 0.5
+
+            print("\nAt x = \(x):")
+            print("CDF:", fittedDistribution.cdf(at: x))
+            print("PDF:", fittedDistribution.pdf(at: x))
+            
+            return (fittedDistribution.mean, fittedDistribution.span)
+        } catch {
+            print("Error:", error)
+        }
+        return (0.0, 0.0)
     }
 }
 
@@ -489,7 +554,6 @@ func runTheFuckingCode() {
     
     let C = Core()
     let TVC = TrainValidateCalibrate()
-    let TestConfig = Config()
 
     let Brain = BRAIN()
     
@@ -497,7 +561,7 @@ func runTheFuckingCode() {
     if TestConfig.StatisticalCalibration {
         let RunData = LossFunctionCalibrationData()
         var TotalFiringByOutputNeuronsInObservationPhaseData: [Int32] = []
-        for _ in 1...5 {
+        for _ in 1...TestConfig.NumberOfRunsOfCalibration {
             C.InitializeBrain(Brain: Brain, BrainConfig: BRAIN.BrainConfig(NumberOfInputs: RunData.NumberOfInputs, NumberOfOutputs: RunData.NumberOfOutputs))
             let TempTFBONIOPDData = TVC.CalibrationProcessOnce(B: Brain, RunDataSet: RunData.DataSet)
             for DataPoint in TempTFBONIOPDData {
@@ -521,7 +585,7 @@ func runTheFuckingCode() {
     C.InitializeBrain(Brain: Brain, BrainConfig: BRAIN.BrainConfig(NumberOfInputs: RunData.NumberOfInputs, NumberOfOutputs: RunData.NumberOfOutputs))
     print("Brain initialization completed.")
 
-    for _ in 1...20 {
+    for _ in 1...TestConfig.NumberOfRunsOfTraining {
         TVC.TrainOrValidate(B: Brain, IsValidation: false, RunDataSet: RunData.TrainData)
     }
 
